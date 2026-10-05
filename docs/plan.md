@@ -49,7 +49,41 @@ either a public dev/test setup or an existing PBMM / Azure Landing Zone network.
 - CI workflow for build, lint, and tests, plus a GitHub Actions deployment
   workflow.
 
-### Phase 2 — Hardening and first deployment
+### Phase 2 — Parameterization and azd parity
+
+Restore the customization the original document-review-platform offered, using
+grouped, typed parameters instead of ~115 flat ones.
+
+- **azd integration:**
+  - Add a `main.parameters.json` that maps every input to
+    `${AZURE_*=default}`, so `azd env set` can change it.
+  - Register the web app and Logic App as azd services.
+  - Expose the outputs azd needs.
+- **SKUs (`skus` object):** web App Service plan, Logic App plan, container
+  registry, AI Search (including replicas and partitions), AI Services,
+  Document Intelligence, Cosmos DB mode and throughput, and storage.
+- **Naming (`names` object):** optional name overrides for each resource.
+  Default names use the standard abbreviations plus a unique token. Resource
+  group names can already be overridden.
+- **Models (`modelDeployments` array):** any number of deployments (for example
+  chat or embedding), each with model, version, SKU, and capacity.
+- **Identity (`identity` object):**
+  - `tenantId` and `authTenantId`.
+  - `principalId` and the deploying principal's type, used for developer data
+    roles.
+  - A toggle for App Service built-in authentication ("Easy Auth").
+- **Hooks:** port the azd `preprovision` and `postprovision` hooks that create
+  Entra app registrations. Keep secrets out of parameters; use federated
+  credentials or managed identity where possible.
+- **Hosting:** optional App Service Environment (ASE) IDs, CORS allowed
+  origins, and an IP allow-list for public mode.
+- **Out of scope:** app-specific settings such as container names and
+  instruction files. Each solution owns these.
+- **Must avoid:** the original's flaws — untyped on/off settings that can
+  combine into invalid configurations, secrets passed as parameters, misspelled
+  names, and stale region allow-lists.
+
+### Phase 3 — Hardening and first deployment
 
 - Authenticate the API endpoint the Logic App calls (App Service built-in
   authentication, "Easy Auth", using the Logic App's managed identity).
@@ -61,7 +95,7 @@ either a public dev/test setup or an existing PBMM / Azure Landing Zone network.
 - Fix configuration mismatches, such as the Logic App worker runtime setting.
 - Run `what-if` and a test deployment in `public` mode, then in `private` mode.
 
-### Phase 3 — Reuse of existing resources
+### Phase 4 — Reuse of existing resources
 
 - `new` or `existing` mode for Foundry/OpenAI, Document Intelligence, and AI
   Search.
@@ -71,12 +105,14 @@ either a public dev/test setup or an existing PBMM / Azure Landing Zone network.
   `existing` monitoring, or document clearly that its owner manages it.
 - Diagnostic settings on all resources when monitoring is enabled.
 
-### Phase 4 — Usability and validation
+### Phase 5 — Usability and validation
 
-- Typed Bicep parameters for each mode, and format checks on resource IDs.
+- Format checks on resource IDs and other inputs. The typed parameters
+  themselves are introduced in Phase 2.
 - A network contract document listing what PBMM/ALZ must provide: subnets,
   delegations, NSG rules, routing, and private DNS zones.
-- Test the mode combinations (network × monitoring × new/existing AI) using
+- Test the mode combinations (network × monitoring × new/existing AI ×
+  SKU/model overrides) using
   `what-if` and parameter tests that check invalid inputs are rejected.
 - Tests for the real Azure path in the API, and checks for the Logic App
   workflow.
@@ -107,4 +143,4 @@ either a public dev/test setup or an existing PBMM / Azure Landing Zone network.
 - Private-mode deployment of app code needs a self-hosted runner that can reach
   the private network.
 - Nothing has been deployed to Azure yet, so runtime behaviour is unverified
-  until Phase 2.
+  until Phase 3.
