@@ -488,6 +488,22 @@ module foundryProjectAiRoles './modules/shared/role-assignment.bicep' = [
   }
 ]
 
+module projectCapabilityHost './modules/ai/project-capability-host.bicep' = {
+  name: 'foundry-project-capability-host'
+  scope: aiResourceGroup
+  params: {
+    foundryName: ai.outputs.foundryName
+    projectName: ai.outputs.foundryProjectName
+    storageConnectionName: data.outputs.storageName
+    threadStorageConnectionName: data.outputs.cosmosName
+    vectorStoreConnectionName: ai.outputs.searchName
+  }
+  dependsOn: [
+    foundryProjectAppRoles
+    foundryProjectAiRoles
+  ]
+}
+
 module webCosmosDataRole './modules/shared/cosmos-data-role.bicep' = {
   name: 'web-cosmos-data-role'
   scope: applicationResourceGroup

@@ -86,7 +86,6 @@ resource documentIntelligence 'Microsoft.CognitiveServices/accounts@2024-10-01' 
     customSubDomainName: names.documentIntelligence
     disableLocalAuth: true
     networkAcls: {
-      bypass: 'AzureServices'
       defaultAction: privateMode ? 'Deny' : 'Allow'
       ipRules: []
       virtualNetworkRules: []
@@ -106,11 +105,6 @@ resource search 'Microsoft.Search/searchServices@2024-06-01-preview' = {
     type: 'SystemAssigned'
   }
   properties: {
-    authOptions: {
-      aadOrApiKey: {
-        aadAuthFailureMode: 'http401WithBearerChallenge'
-      }
-    }
     disableLocalAuth: true
     hostingMode: 'default'
     networkRuleSet: {
@@ -188,28 +182,6 @@ resource accountCapabilityHost 'Microsoft.CognitiveServices/accounts/capabilityH
   }
 }
 
-resource projectCapabilityHost 'Microsoft.CognitiveServices/accounts/projects/capabilityHosts@2025-04-01-preview' = {
-  parent: project
-  name: 'agents'
-  properties: {
-    #disable-next-line BCP037
-    capabilityHostKind: 'Agents'
-    storageConnections: [
-      storageName
-    ]
-    threadStorageConnections: [
-      cosmosName
-    ]
-    vectorStoreConnections: [
-      searchName
-    ]
-  }
-  dependsOn: [
-    accountCapabilityHost
-    modelDeploymentResources
-  ]
-}
-
 module foundryPe '../networking/private-endpoint.bicep' = if (privateMode) {
   name: 'foundry-private-endpoint'
   params: {
@@ -267,6 +239,7 @@ output foundryId string = foundry.id
 output foundryName string = foundry.name
 output foundryEndpoint string = foundry.properties.endpoint
 output foundryOpenAiEndpoint string = 'https://${foundry.name}.openai.azure.com'
+output foundryProjectName string = project.name
 output foundryProjectId string = project.id
 output foundryProjectEndpoint string = 'https://${foundry.properties.customSubDomainName}.services.ai.azure.com/api/projects/${project.name}'
 output foundryProjectPrincipalId string = project.identity.principalId
