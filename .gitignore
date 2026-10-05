@@ -1,0 +1,15 @@
+.azure/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+node_modules/
+dist/
+app/backend/static/
+app/logic/local.settings.json
+app/logic/.func/
+.DS_Store
+

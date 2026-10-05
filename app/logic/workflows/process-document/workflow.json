@@ -1,0 +1,103 @@
+{
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "triggers": {
+      "When_A_PDF_Is_Added": {
+        "type": "ServiceProvider",
+        "inputs": {
+          "parameters": {
+            "path": "@concat(parameters('storageDocumentsContainer'), '/', '{name}.pdf')"
+          },
+          "serviceProviderConfiguration": {
+            "connectionName": "azureblob",
+            "operationId": "whenABlobIsAddedOrModified",
+            "serviceProviderId": "/serviceProviders/AzureBlob"
+          }
+        }
+      }
+    },
+    "actions": {
+      "Try_Process_Document": {
+        "type": "Scope",
+        "actions": {
+          "Parse_Job_Id": {
+            "type": "Compose",
+            "inputs": "@first(split(triggerBody()?['name'], '/'))",
+            "runAfter": {}
+          },
+          "Call_Processing_API": {
+            "type": "Http",
+            "inputs": {
+              "method": "POST",
+              "uri": "@{appsetting('BACKEND_API_URL')}/api/jobs/process",
+              "headers": {
+                "Content-Type": "application/json",
+                "X-Workflow-Run-Id": "@workflow().run.name"
+              },
+              "body": {
+                "jobId": "@outputs('Parse_Job_Id')",
+                "blobName": "@triggerBody()?['name']"
+              },
+              "authentication": {
+                "type": "ManagedServiceIdentity",
+                "audience": "@appsetting('BACKEND_API_AUDIENCE')"
+              },
+              "retryPolicy": {
+                "type": "exponential",
+                "count": 4,
+                "interval": "PT7S",
+                "minimumInterval": "PT5S",
+                "maximumInterval": "PT5M"
+              }
+            },
+            "runAfter": {
+              "Parse_Job_Id": [
+                "SUCCEEDED"
+              ]
+            }
+          }
+        },
+        "runAfter": {}
+      },
+      "Handle_Processing_Failure": {
+        "type": "Scope",
+        "actions": {
+          "Capture_Failure": {
+            "type": "Compose",
+            "inputs": {
+              "message": "Document processing failed.",
+              "runId": "@workflow().run.name",
+              "details": "@result('Try_Process_Document')"
+            },
+            "runAfter": {}
+          },
+          "Terminate_Failed": {
+            "type": "Terminate",
+            "inputs": {
+              "runStatus": "Failed",
+              "runError": {
+                "code": "DocumentProcessingFailed",
+                "message": "The document processing API did not complete successfully."
+              }
+            },
+            "runAfter": {
+              "Capture_Failure": [
+                "SUCCEEDED"
+              ]
+            }
+          }
+        },
+        "runAfter": {
+          "Try_Process_Document": [
+            "FAILED",
+            "TIMEDOUT"
+          ]
+        }
+      }
+    },
+    "outputs": {}
+  },
+  "kind": "Stateful"
+}
+

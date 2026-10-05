@@ -1,0 +1,16 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "WORKFLOWS_TENANT_ID": "",
+    "WORKFLOWS_SUBSCRIPTION_ID": "",
+    "WORKFLOWS_RESOURCE_GROUP_NAME": "",
+    "WORKFLOWS_LOCATION_NAME": "",
+    "AZURE_STORAGE_ENDPOINT": "https://example.blob.core.windows.net/",
+    "AZURE_STORAGE_SUBMISSIONS_CONTAINER": "documents",
+    "BACKEND_API_URL": "http://localhost:50505",
+    "BACKEND_API_AUDIENCE": "api://logic-app-ai-accelerator"
+  }
+}
+

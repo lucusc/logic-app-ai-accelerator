@@ -1,0 +1,7 @@
+{
+  "storageDocumentsContainer": {
+    "type": "String",
+    "value": "@appsetting('AZURE_STORAGE_SUBMISSIONS_CONTAINER')"
+  }
+}
+

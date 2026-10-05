@@ -1,0 +1,20 @@
+name: logic-app-ai-accelerator
+metadata:
+  template: logic-app-ai-accelerator@0.1.0
+infra:
+  provider: bicep
+  path: infra
+services:
+  api:
+    project: app/backend
+    host: appservice
+    language: python
+  web:
+    project: app/frontend
+    host: appservice
+    language: js
+  logic:
+    project: app/logic
+    host: function
+    language: dotnet
+
