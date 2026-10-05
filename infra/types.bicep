@@ -32,6 +32,8 @@ type privateNetworkType = {
   privateEndpointSubnetId: string?
   webIntegrationSubnetId: string?
   logicIntegrationSubnetId: string?
+  @description('Optional subnet delegated to Microsoft.App/environments for Foundry Agent Service network injection.')
+  agentSubnetId: string?
   privateDnsZoneIds: privateDnsZoneIdsType?
 }
 

@@ -207,10 +207,12 @@ var logicIntegrationSubnetId = !privateMode || !empty(logicAseId)
     ? privateNetwork.logicIntegrationSubnetId!
     : fail('privateNetwork.logicIntegrationSubnetId is required in private mode unless the Logic App uses an App Service Environment.')
 
-var subnetsAreDistinct = (empty(webIntegrationSubnetId) || toLower(webIntegrationSubnetId) != toLower(privateEndpointSubnetId)) && (empty(logicIntegrationSubnetId) || toLower(logicIntegrationSubnetId) != toLower(privateEndpointSubnetId)) && (empty(webIntegrationSubnetId) || toLower(webIntegrationSubnetId) != toLower(logicIntegrationSubnetId))
+var agentSubnetId = privateMode ? (privateNetwork.?agentSubnetId ?? '') : ''
+
+var subnetsAreDistinct = (empty(webIntegrationSubnetId) || toLower(webIntegrationSubnetId) != toLower(privateEndpointSubnetId)) && (empty(logicIntegrationSubnetId) || toLower(logicIntegrationSubnetId) != toLower(privateEndpointSubnetId)) && (empty(webIntegrationSubnetId) || toLower(webIntegrationSubnetId) != toLower(logicIntegrationSubnetId)) && (empty(agentSubnetId) || (toLower(agentSubnetId) != toLower(privateEndpointSubnetId) && toLower(agentSubnetId) != toLower(webIntegrationSubnetId) && toLower(agentSubnetId) != toLower(logicIntegrationSubnetId)))
 var distinctPrivateSubnets = !privateMode || subnetsAreDistinct
   ? true
-  : fail('Private endpoint, web integration, and Logic App integration subnets must be separate.')
+  : fail('Private endpoint, web integration, Logic App integration, and agent subnets must be separate.')
 
 var suppliedDnsZoneIds = privateNetwork.?privateDnsZoneIds ?? {}
 var privateDnsZoneIds = !privateMode
@@ -315,6 +317,7 @@ module ai './modules/ai/stack.bicep' = {
     modelDeployments: modelDeployments
     chatDeploymentName: resolvedChatDeploymentName
     privateEndpointSubnetId: privateEndpointSubnetId
+    agentSubnetId: agentSubnetId
     privateDnsZoneIds: privateDnsZoneIds
     storageName: data.outputs.storageName
     storageId: data.outputs.storageId
@@ -501,6 +504,20 @@ module projectCapabilityHost './modules/ai/project-capability-host.bicep' = {
   dependsOn: [
     foundryProjectAppRoles
     foundryProjectAiRoles
+  ]
+}
+
+module foundryProjectPostRoles './modules/ai/project-post-capability-host-roles.bicep' = {
+  name: 'foundry-project-post-capability-host-roles'
+  scope: applicationResourceGroup
+  params: {
+    cosmosAccountName: data.outputs.cosmosName
+    storageAccountName: data.outputs.storageName
+    projectPrincipalId: ai.outputs.foundryProjectPrincipalId
+    projectWorkspaceId: ai.outputs.foundryProjectWorkspaceId
+  }
+  dependsOn: [
+    projectCapabilityHost
   ]
 }
 

@@ -5,6 +5,8 @@ param names object
 param networkMode string
 param privateEndpointSubnetId string = ''
 param privateDnsZoneIds object = {}
+@description('Optional subnet delegated to Microsoft.App/environments. Enables Agent Service network injection.')
+param agentSubnetId string = ''
 param storageName string
 param storageId string
 param storageBlobEndpoint string
@@ -22,6 +24,7 @@ param modelDeployments array
 param chatDeploymentName string
 
 var privateMode = networkMode == 'private'
+var useAgentNetworkInjection = privateMode && !empty(agentSubnetId)
 var foundryName = names.foundryAccount
 var searchName = names.search
 
@@ -47,6 +50,15 @@ resource foundry 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' = {
       virtualNetworkRules: []
     }
     publicNetworkAccess: privateMode ? 'Disabled' : 'Enabled'
+    networkInjections: useAgentNetworkInjection
+      ? [
+          {
+            scenario: 'agent'
+            subnetArmId: agentSubnetId
+            useMicrosoftManagedNetwork: false
+          }
+        ]
+      : null
   }
 }
 
@@ -173,7 +185,8 @@ resource project 'Microsoft.CognitiveServices/accounts/projects@2025-04-01-previ
   }
 }
 
-resource accountCapabilityHost 'Microsoft.CognitiveServices/accounts/capabilityHosts@2025-04-01-preview' = {
+// With network injection the platform creates the account capability host itself.
+resource accountCapabilityHost 'Microsoft.CognitiveServices/accounts/capabilityHosts@2025-04-01-preview' = if (!useAgentNetworkInjection) {
   parent: foundry
   name: 'agents'
   properties: {
@@ -239,7 +252,11 @@ output foundryId string = foundry.id
 output foundryName string = foundry.name
 output foundryEndpoint string = foundry.properties.endpoint
 output foundryOpenAiEndpoint string = 'https://${foundry.name}.openai.azure.com'
+// internalId is returned by the API but missing from the Bicep types.
+#disable-next-line BCP053
+var projectInternalId = project.properties.internalId
 output foundryProjectName string = project.name
+output foundryProjectWorkspaceId string = '${substring(projectInternalId, 0, 8)}-${substring(projectInternalId, 8, 4)}-${substring(projectInternalId, 12, 4)}-${substring(projectInternalId, 16, 4)}-${substring(projectInternalId, 20, 12)}'
 output foundryProjectId string = project.id
 output foundryProjectEndpoint string = 'https://${foundry.properties.customSubDomainName}.services.ai.azure.com/api/projects/${project.name}'
 output foundryProjectPrincipalId string = project.identity.principalId

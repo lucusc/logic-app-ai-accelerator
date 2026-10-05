@@ -41,6 +41,7 @@ param privateNetwork = {
   privateEndpointSubnetId: readEnvironmentVariable('AZURE_PRIVATE_ENDPOINT_SUBNET_ID', '')
   webIntegrationSubnetId: readEnvironmentVariable('AZURE_WEB_INTEGRATION_SUBNET_ID', '')
   logicIntegrationSubnetId: readEnvironmentVariable('AZURE_LOGIC_INTEGRATION_SUBNET_ID', '')
+  agentSubnetId: readEnvironmentVariable('AZURE_AGENT_SUBNET_ID', '')
   privateDnsZoneIds: union(standardDnsZoneIds, json(readEnvironmentVariable('AZURE_PRIVATE_DNS_ZONE_IDS', '{}')))
 }
 
