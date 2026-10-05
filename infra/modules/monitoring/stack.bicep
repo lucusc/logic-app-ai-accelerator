@@ -1,6 +1,10 @@
 param location string
-param resourceToken string
 param tags object
+@description('Resolved resource names from main.bicep.')
+param names object
+@minValue(30)
+@maxValue(730)
+param retentionInDays int = 30
 param networkMode string
 param privateEndpointSubnetId string = ''
 param privateDnsZoneIds object = {}
@@ -8,7 +12,7 @@ param privateDnsZoneIds object = {}
 var privateMode = networkMode == 'private'
 
 resource workspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
-  name: 'log-${resourceToken}'
+  name: names.logAnalytics
   location: location
   tags: tags
   properties: {
@@ -17,7 +21,7 @@ resource workspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
     }
     publicNetworkAccessForIngestion: privateMode ? 'Disabled' : 'Enabled'
     publicNetworkAccessForQuery: privateMode ? 'Disabled' : 'Enabled'
-    retentionInDays: 30
+    retentionInDays: retentionInDays
     sku: {
       name: 'PerGB2018'
     }
@@ -25,7 +29,7 @@ resource workspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
 }
 
 resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = {
-  name: 'appi-${resourceToken}'
+  name: names.applicationInsights
   location: location
   kind: 'web'
   tags: tags
@@ -39,7 +43,7 @@ resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = {
 }
 
 resource ampls 'Microsoft.Insights/privateLinkScopes@2021-07-01-preview' = if (privateMode) {
-  name: 'ampls-${resourceToken}'
+  name: names.monitorPrivateLinkScope
   location: 'global'
   tags: tags
   properties: {

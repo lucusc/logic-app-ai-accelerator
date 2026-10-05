@@ -41,6 +41,7 @@
               },
               "authentication": {
                 "type": "ManagedServiceIdentity",
+                "identity": "@appsetting('WORKFLOWS_IDENTITY_RESOURCE_ID')",
                 "audience": "@appsetting('BACKEND_API_AUDIENCE')"
               },
               "retryPolicy": {

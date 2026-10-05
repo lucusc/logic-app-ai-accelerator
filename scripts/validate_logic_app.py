@@ -15,6 +15,8 @@ def load_json(path: Path) -> object:
 def main() -> None:
     required_settings: set[str] = set()
     for path in LOGIC_ROOT.rglob("*.json"):
+        if "node_modules" in path.parts:
+            continue
         content = path.read_text(encoding="utf-8")
         load_json(path)
         required_settings.update(re.findall(r"@appsetting\('([^']+)'\)", content))

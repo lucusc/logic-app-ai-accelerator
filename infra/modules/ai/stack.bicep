@@ -1,6 +1,7 @@
 param location string
-param resourceToken string
 param tags object
+@description('Resolved resource names from main.bicep.')
+param names object
 param networkMode string
 param privateEndpointSubnetId string = ''
 param privateDnsZoneIds object = {}
@@ -10,14 +11,19 @@ param storageBlobEndpoint string
 param cosmosName string
 param cosmosId string
 param cosmosEndpoint string
-param modelName string = 'gpt-4.1-mini'
-param modelVersion string = '2025-04-14'
-param modelSkuName string = 'GlobalStandard'
-param modelCapacity int = 10
+param aiServicesSku string = 'S0'
+param documentIntelligenceSku string = 'S0'
+@description('Search SKU: { name, replicaCount?, partitionCount?, semanticSearch? }.')
+param searchSku object = {
+  name: 'standard'
+}
+@description('Model deployments: [{ name, model, version, format?, skuName?, capacity?, versionUpgradeOption? }].')
+param modelDeployments array
+param chatDeploymentName string
 
 var privateMode = networkMode == 'private'
-var foundryName = 'aif-${resourceToken}'
-var searchName = 'srch-${resourceToken}'
+var foundryName = names.foundryAccount
+var searchName = names.search
 
 resource foundry 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' = {
   name: foundryName
@@ -25,7 +31,7 @@ resource foundry 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' = {
   tags: tags
   kind: 'AIServices'
   sku: {
-    name: 'S0'
+    name: aiServicesSku
   }
   identity: {
     type: 'SystemAssigned'
@@ -44,36 +50,40 @@ resource foundry 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' = {
   }
 }
 
-resource modelDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-04-01-preview' = {
-  parent: foundry
-  name: modelName
-  sku: {
-    capacity: modelCapacity
-    name: modelSkuName
-  }
-  properties: {
-    model: {
-      format: 'OpenAI'
-      name: modelName
-      version: modelVersion
+// Deployments on one account must be created sequentially.
+@batchSize(1)
+resource modelDeploymentResources 'Microsoft.CognitiveServices/accounts/deployments@2025-04-01-preview' = [
+  for deployment in modelDeployments: {
+    parent: foundry
+    name: deployment.name
+    sku: {
+      capacity: deployment.?capacity ?? 10
+      name: deployment.?skuName ?? 'GlobalStandard'
     }
-    versionUpgradeOption: 'OnceNewDefaultVersionAvailable'
+    properties: {
+      model: {
+        format: deployment.?format ?? 'OpenAI'
+        name: deployment.model
+        version: deployment.version
+      }
+      versionUpgradeOption: deployment.?versionUpgradeOption ?? 'OnceNewDefaultVersionAvailable'
+    }
   }
-}
+]
 
 resource documentIntelligence 'Microsoft.CognitiveServices/accounts@2024-10-01' = {
-  name: 'di-${resourceToken}'
+  name: names.documentIntelligence
   location: location
   tags: tags
   kind: 'FormRecognizer'
   sku: {
-    name: 'S0'
+    name: documentIntelligenceSku
   }
   identity: {
     type: 'SystemAssigned'
   }
   properties: {
-    customSubDomainName: 'di-${resourceToken}'
+    customSubDomainName: names.documentIntelligence
     disableLocalAuth: true
     networkAcls: {
       bypass: 'AzureServices'
@@ -90,7 +100,7 @@ resource search 'Microsoft.Search/searchServices@2024-06-01-preview' = {
   location: location
   tags: tags
   sku: {
-    name: 'standard'
+    name: searchSku.name
   }
   identity: {
     type: 'SystemAssigned'
@@ -107,16 +117,16 @@ resource search 'Microsoft.Search/searchServices@2024-06-01-preview' = {
       bypass: 'None'
       ipRules: []
     }
-    partitionCount: 1
+    partitionCount: searchSku.?partitionCount ?? 1
     publicNetworkAccess: privateMode ? 'disabled' : 'enabled'
-    replicaCount: 1
-    semanticSearch: 'free'
+    replicaCount: searchSku.?replicaCount ?? 1
+    semanticSearch: searchSku.?semanticSearch ?? 'free'
   }
 }
 
 resource project 'Microsoft.CognitiveServices/accounts/projects@2025-04-01-preview' = {
   parent: foundry
-  name: 'accelerator'
+  name: names.foundryProject
   location: location
   identity: {
     type: 'SystemAssigned'
@@ -196,6 +206,7 @@ resource projectCapabilityHost 'Microsoft.CognitiveServices/accounts/projects/ca
   }
   dependsOn: [
     accountCapabilityHost
+    modelDeploymentResources
   ]
 }
 
@@ -264,4 +275,4 @@ output documentIntelligenceEndpoint string = documentIntelligence.properties.end
 output searchId string = search.id
 output searchEndpoint string = 'https://${search.name}.search.windows.net'
 output searchName string = search.name
-output modelDeploymentName string = modelDeployment.name
+output chatDeploymentName string = modelDeploymentResources[indexOf(map(modelDeployments, d => d.name), chatDeploymentName)].name

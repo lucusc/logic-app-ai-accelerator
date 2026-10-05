@@ -1,17 +1,22 @@
 param location string
-@minLength(3)
-param resourceToken string
 param tags object
 param networkMode string
+@description('Resolved resource names from main.bicep.')
+param names object
 param privateEndpointSubnetId string = ''
 param privateDnsZoneIds object = {}
 param storageSku string = 'Standard_LRS'
-param cosmosServerless bool = true
+@description('Cosmos DB capacity mode: { mode: serverless | provisioned, throughput?: int }.')
+param cosmosSku object = {
+  mode: 'serverless'
+}
+param containerRegistrySku string = 'Premium'
 
 var privateMode = networkMode == 'private'
+var cosmosServerless = cosmosSku.mode == 'serverless'
 
 resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
-  name: 'stapp${resourceToken}'
+  name: names.storageAccount
   location: location
   tags: tags
   kind: 'StorageV2'
@@ -52,7 +57,7 @@ resource documentsContainer 'Microsoft.Storage/storageAccounts/blobServices/cont
 }
 
 resource logicStorage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
-  name: 'stlogic${resourceToken}'
+  name: names.logicStorageAccount
   location: location
   tags: tags
   kind: 'StorageV2'
@@ -74,7 +79,7 @@ resource logicStorage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
 }
 
 resource cosmos 'Microsoft.DocumentDB/databaseAccounts@2024-11-15' = {
-  name: 'cosmos-${resourceToken}'
+  name: names.cosmosAccount
   location: location
   tags: tags
   kind: 'GlobalDocumentDB'
@@ -112,6 +117,11 @@ resource database 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases@2024-11-15
     resource: {
       id: 'accelerator'
     }
+    options: cosmosServerless
+      ? {}
+      : {
+          throughput: cosmosSku.?throughput ?? 400
+        }
   }
 }
 
@@ -133,18 +143,18 @@ resource jobsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/conta
 }
 
 resource registry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
-  name: 'cr${resourceToken}'
+  name: names.containerRegistry
   location: location
   tags: tags
   sku: {
-    name: 'Premium'
+    name: containerRegistrySku
   }
   properties: {
     adminUserEnabled: false
     dataEndpointEnabled: false
     publicNetworkAccess: privateMode ? 'Disabled' : 'Enabled'
     networkRuleBypassOptions: 'AzureServices'
-    policies: {
+    policies: containerRegistrySku != 'Premium' ? {} : {
       exportPolicy: {
         status: privateMode ? 'disabled' : 'enabled'
       }

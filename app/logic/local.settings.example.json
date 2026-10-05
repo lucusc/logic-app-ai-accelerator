@@ -10,7 +10,7 @@
     "AZURE_STORAGE_ENDPOINT": "https://example.blob.core.windows.net/",
     "AZURE_STORAGE_SUBMISSIONS_CONTAINER": "documents",
     "BACKEND_API_URL": "http://localhost:50505",
-    "BACKEND_API_AUDIENCE": "api://logic-app-ai-accelerator"
+    "BACKEND_API_AUDIENCE": "api://logic-app-ai-accelerator",
+    "WORKFLOWS_IDENTITY_RESOURCE_ID": ""
   }
 }
-

@@ -1,0 +1,5 @@
+{
+  "name": "logic-app-ai-accelerator-workflows",
+  "private": true,
+  "description": "Placeholder so azd can package the Logic Apps Standard project with the js function host."
+}
