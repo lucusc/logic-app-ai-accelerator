@@ -95,7 +95,7 @@ Common settings (see `infra/main.bicepparam` for the full list):
 
 | Variable | Default | Notes |
 |---|---|---|
-| `AZURE_NETWORK_MODE` | `public` | `private` also needs `AZURE_PRIVATE_ENDPOINT_SUBNET_ID`, `AZURE_WEB_INTEGRATION_SUBNET_ID`, `AZURE_LOGIC_INTEGRATION_SUBNET_ID`, and DNS zones |
+| `AZURE_NETWORK_MODE` | `public` | `private` also needs `AZURE_PRIVATE_ENDPOINT_SUBNET_ID`, `AZURE_WEB_INTEGRATION_SUBNET_ID`, `AZURE_LOGIC_INTEGRATION_SUBNET_ID`, `AZURE_AGENT_SUBNET_ID` (delegated to `Microsoft.App/environments`), and DNS zones |
 | `AZURE_PRIVATE_DNS_ZONES_RESOURCE_GROUP_ID` | | Builds standard public-cloud zone IDs from one resource group |
 | `AZURE_PRIVATE_DNS_ZONE_IDS` | `{}` | JSON object that overrides individual zone IDs (needed for sovereign clouds) |
 | `AZURE_MONITORING_MODE` | `new` | `existing` needs `AZURE_EXISTING_APPLICATION_INSIGHTS_CONNECTION_STRING` and `AZURE_EXISTING_LOG_ANALYTICS_WORKSPACE_ID` |
@@ -108,6 +108,8 @@ Common settings (see `infra/main.bicepparam` for the full list):
 | `AZURE_USE_APP_SERVICE_AUTH` | `false` | Turns on Entra sign-in for the web app (see below) |
 | `AZURE_PRINCIPAL_TYPE` | `User` | Set by you; azd sets `AZURE_PRINCIPAL_ID` to the signed-in identity automatically |
 | `AZURE_NAME_*`, `AZURE_RG_*_NAME` | | Resource and resource group name overrides |
+
+If your subscription forces storage `publicNetworkAccess` to `Disabled`, the Logic App can't reach its host storage in `public` mode; use `private` mode. `scripts/test-network/deploy.sh <env> <location>` builds a throwaway VNet and DNS zones for trying it.
 
 azd deploys two services: `web` (container built remotely in ACR) and `logic` (the `app/logic` workflow project, deployed through the Functions host that Logic Apps Standard runs on). In `private` mode, run azd from a machine that can reach the private endpoints and SCM sites.
 

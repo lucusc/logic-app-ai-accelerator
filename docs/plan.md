@@ -153,6 +153,48 @@ environment; private mode provisions successfully, and its checks pass from
 inside the network; all fixes are committed; `docs/plan.md` and the README
 reflect what was learned.
 
+#### Phase 3 results
+
+Status: code fixes done and committed. Public mode could not be completed and
+private mode was not deployed, so end-to-end checks remain open.
+
+**Fixed after real provisioning in `p3dev` (public, swedencentral):**
+- Document Intelligence rejects `networkAcls.bypass`.
+- Search with `disableLocalAuth: true` must not set `authOptions`.
+- The project capability host needs the project identity's roles first (Storage Blob Data Contributor, Cosmos DB Operator, Search Index Data Contributor, Search Service Contributor), and connections must exist. It lives in `modules/ai/project-capability-host.bicep` and runs after the role modules. A failed capability host can't be updated: delete it with `az rest --method delete`, then redeploy.
+- With agent `networkInjections`, the platform creates the account capability host itself, so ours is skipped in that case.
+- Remote build needs a root `.dockerignore` (otherwise "archive/tar: write too long").
+- The backend needs `aiohttp` for `azure.identity.aio`.
+- The output `AZURE_MODEL_DEPLOYMENTS` collided with the input of the same name and broke the second `azd provision`. It is now `AZURE_MODEL_DEPLOYMENT_NAMES`.
+
+**Blocked: storage policy.** In the test subscription, a policy forces
+`publicNetworkAccess` to `Disabled` on storage accounts. The Logic App host
+then returns 503 (identity-based host storage gets 403), so public mode with
+public storage can't work there. Logic Apps Standard needs a network path to
+its host storage (blob, queue, table, file). Options: use private endpoints
+plus VNet integration even in public mode, or get a policy exemption.
+
+**Not verified:** Logic App blob trigger, K3, K4, K5, `samples/create_agent.py`,
+a browser sign-in (unauthenticated routes return 401, not a redirect), private
+provisioning, and the in-network checks. The first private attempt in
+swedencentral failed with `ResourcesForSkuUnavailable` for Search (basic and
+standard); northeurope accepted a test Search service. Treat as transient
+regional capacity.
+
+**Verified:** what-if of private mode (34 resources) passes; resource group
+and resource name overrides pass `what-if`; `verify.sh` is green.
+
+**For the platform team (private mode):** private endpoints for the Logic App
+storage (blob, file, queue, table) and web storage (blob); a delegated agent
+subnet (`Microsoft.App/environments`); web and Logic App integration subnets
+(`Microsoft.Web/serverFarms`); the private DNS zones; and a runner inside the
+network for `azd deploy`. `scripts/test-network/` builds a test VNet like this.
+
+**Teardown quirks:** delete the Azure Monitor private link scope before purging
+the Log Analytics workspace; a Foundry account must reach a terminal state
+before its resource group deletes; purge soft-deleted Cognitive Services
+accounts.
+
 ### Phase 4 — Reuse of existing resources
 
 Goal: let a solution plug in AI and monitoring resources that already exist.
@@ -334,13 +376,13 @@ future enhancement.
 
 | ID | Issue | Location | Phase |
 |---|---|---|---|
-| K1 | **Bug:** the blob trigger connection uses `ManagedServiceIdentity` without an identity, so it runs as the Logic App system-assigned identity, which has no storage roles. Add `"identity": "@appsetting('WORKFLOWS_IDENTITY_RESOURCE_ID')"` to `authProvider`, or give the system-assigned identity the roles. | `app/logic/connections.json` | 3 |
-| K2 | `FUNCTIONS_WORKER_RUNTIME` is `dotnet` in infrastructure but `node` in `local.settings.example.json`. Pick the supported value for Logic Apps Standard and use it in both places. | `infra/modules/application/compute.bicep` (~line 127), `app/logic/local.settings.example.json` | 3 |
+| K1 | **Fixed.** Was: the blob trigger connection uses `ManagedServiceIdentity` without an identity, so it runs as the Logic App system-assigned identity, which has no storage roles. Add `"identity": "@appsetting('WORKFLOWS_IDENTITY_RESOURCE_ID')"` to `authProvider`, or give the system-assigned identity the roles. | `app/logic/connections.json` | 3 |
+| K2 | **Resolved:** `FUNCTIONS_WORKER_RUNTIME` is `dotnet` in both places, the value Logic Apps Standard expects (the working reference project uses it too). | `infra/modules/application/compute.bicep` (~line 127), `app/logic/local.settings.example.json` | 3 |
 | K3 | Not yet confirmed: a parameterized `identity` (`@appsetting(...)`) on the HTTP action works in Standard. If it doesn't, put the resource ID in `parameters.json` or hard-code it at deploy time. | `app/logic/workflows/process-document/workflow.json` | 3 |
 | K4 | The blob trigger `path` is `documents/{name}.pdf`. Check whether it fires for subfolders, and how `{name}` resolves. | Same workflow | 3 |
 | K5 | `disableLocalAuth: true` on Foundry, Document Intelligence, and Search. Confirm that the agent capability host and samples work this way. | `infra/modules/ai/stack.bicep` | 3 |
-| K6 | CI doesn't run `check_parameter_files.py`, the `scripts/` ruff check, or the `scripts/tests` pytest run, which `verify.sh` does. | `.github/workflows/ci.yml` | 3 |
-| K7 | Private mode has no Foundry agent subnet, `networkInjections`, or post-capability-host roles. | `infra/modules/ai/stack.bicep`, `infra/types.bicep` | 3 |
+| K6 | **Fixed.** Was: CI did not run `check_parameter_files.py`, the `scripts/` ruff check, or the `scripts/tests` pytest run, which `verify.sh` does. | `.github/workflows/ci.yml` | 3 |
+| K7 | **Implemented, not deployed:** agent subnet, `networkInjections`, and post-capability-host roles. Passes `what-if`; never provisioned (see Phase 3 results). | `infra/modules/ai/stack.bicep`, `infra/types.bicep` | 3 |
 | K8 | `existingMonitoring.azureMonitorPrivateLinkScopeId` is accepted but unused. | `infra/main.bicep`, `infra/modules/monitoring/stack.bicep` | 4 |
 | K9 | Only the web app has diagnostic settings. | All modules | 4 |
 | K10 | Public-cloud names are hard-coded: private DNS zone names in `main.bicepparam` (override with `AZURE_PRIVATE_DNS_ZONE_IDS`) and the `foundryOpenAiEndpoint` output (`openai.azure.com`). | `infra/main.bicepparam`, `infra/modules/ai/stack.bicep` | 5 |
