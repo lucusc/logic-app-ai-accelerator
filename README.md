@@ -4,6 +4,8 @@ An application-focused accelerator for building Azure Logic Apps Standard soluti
 
 The accelerator does not recreate PBMM or Azure Landing Zone services. Private deployments integrate with existing subnets, NSGs, routing, egress controls, and private DNS zones.
 
+See [docs/plan.md](docs/plan.md) for the phased roadmap.
+
 ## Deployment modes
 
 | Setting | Values | Behavior |
@@ -28,6 +30,7 @@ app/backend/       Quart API and Azure service orchestration
 app/frontend/      React TypeScript sample UI
 app/logic/         Logic Apps Standard project
 infra/             Subscription-scoped Bicep and reusable modules
+docs/              Plan and design documentation
 samples/           Foundry agent setup example
 scripts/           Local verification
 ```

@@ -257,6 +257,7 @@ output foundryName string = foundry.name
 output foundryEndpoint string = foundry.properties.endpoint
 output foundryOpenAiEndpoint string = 'https://${foundry.name}.openai.azure.com'
 output foundryProjectId string = project.id
+output foundryProjectEndpoint string = 'https://${foundry.properties.customSubDomainName}.services.ai.azure.com/api/projects/${project.name}'
 output foundryProjectPrincipalId string = project.identity.principalId
 output documentIntelligenceId string = documentIntelligence.id
 output documentIntelligenceEndpoint string = documentIntelligence.properties.endpoint
