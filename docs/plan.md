@@ -91,9 +91,12 @@ grouped, typed parameters instead of ~115 flat ones.
   - The resource token was shortened, which fixes storage account names that
     could exceed 24 characters.
   - Output names changed to azd-style `UPPER_SNAKE_CASE`.
-  - The `fail()` validations compile, but have not been run against Azure
-    because the current account can't run deployment validation. Phase 3
-    covers this.
+  - The `fail()` validations were confirmed with `az deployment sub validate`.
+    The default public configuration passes. Six invalid inputs are each
+    rejected with a clear message: Basic ACR in private mode, an unknown chat
+    deployment, an IP allow-list in private mode, a non-WS Logic App SKU, App
+    Service authentication without a client ID, and existing monitoring
+    without inputs.
 
 ### Phase 3 — Hardening and first deployment
 
@@ -102,8 +105,12 @@ grouped, typed parameters instead of ~115 flat ones.
   calling the API.
 - Confirm the Logic App HTTP action accepts the user-assigned identity from an
   app setting.
-- Run the deployment validations (`fail()` rules) against Azure for valid and
-  invalid inputs.
+- First `azd provision` attempt (public mode, dev SKUs): the preprovision hook
+  created the app registration, and resource groups, storage, ACR,
+  monitoring, and developer roles deployed. Cosmos DB creation was refused
+  with "high demand" in both Canada Central and Canada East. The environment
+  was torn down and is blocked until a Cosmos DB region access request
+  (aka.ms/cosmosdbquota) is approved.
 - Foundry Agent Service in private mode: add the input for its delegated agent
   subnet, plus the post-capability-host roles on Cosmos DB and Storage.
 - Confirm the Foundry local-authentication setting and the Logic App trigger
@@ -156,6 +163,8 @@ grouped, typed parameters instead of ~115 flat ones.
 
 - Some Foundry capability host and Agent Service networking APIs are in preview
   and may change.
+- Cosmos DB region capacity can block new accounts per subscription. Request
+  region access before the first deployment.
 - Private-mode deployment of app code needs a self-hosted runner that can reach
   the private network.
 - Nothing has been deployed to Azure yet, so runtime behaviour is unverified
