@@ -1,0 +1,7 @@
+**
+!app/backend/requirements.txt
+!app/backend/src/**
+!app/frontend/**
+app/frontend/node_modules
+app/frontend/dist
+**/__pycache__
