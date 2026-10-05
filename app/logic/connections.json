@@ -5,7 +5,8 @@
       "parameterSetName": "ManagedServiceIdentity",
       "parameterValues": {
         "authProvider": {
-          "Type": "ManagedServiceIdentity"
+          "Type": "ManagedServiceIdentity",
+          "identity": "@appsetting('WORKFLOWS_IDENTITY_RESOURCE_ID')"
         },
         "blobStorageEndpoint": "@appsetting('AZURE_STORAGE_ENDPOINT')"
       },

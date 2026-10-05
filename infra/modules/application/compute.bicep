@@ -124,7 +124,7 @@ module logic 'br/public:avm/res/web/site:0.16.0' = {
           APP_KIND: 'workflowApp'
           APPLICATIONINSIGHTS_CONNECTION_STRING: applicationInsightsConnectionString
           FUNCTIONS_EXTENSION_VERSION: '~4'
-          FUNCTIONS_WORKER_RUNTIME: 'dotnet'
+          FUNCTIONS_WORKER_RUNTIME: 'node'
           WEBSITE_NODE_DEFAULT_VERSION: '~20'
           WORKFLOWS_LOCATION_NAME: location
           WORKFLOWS_MANAGEMENT_BASE_URI: environment().resourceManager
