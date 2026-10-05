@@ -100,46 +100,128 @@ grouped, typed parameters instead of ~115 flat ones.
 
 ### Phase 3 — Hardening and first deployment
 
-- Confirm App Service authentication end to end (the infrastructure and hooks
-  were added in Phase 2): user sign-in, and the Logic App's managed identity
-  calling the API.
-- Confirm the Logic App HTTP action accepts the user-assigned identity from an
-  app setting.
-- First `azd provision` attempt (public mode, dev SKUs): the preprovision hook
-  created the app registration, and resource groups, storage, ACR,
-  monitoring, and developer roles deployed. Cosmos DB creation was refused
-  with "high demand" in both Canada Central and Canada East. The environment
-  was torn down and is blocked until a Cosmos DB region access request
-  (aka.ms/cosmosdbquota) is approved.
-- Foundry Agent Service in private mode: add the input for its delegated agent
-  subnet, plus the post-capability-host roles on Cosmos DB and Storage.
-- Confirm the Foundry local-authentication setting and the Logic App trigger
-  path in a real environment.
-- Fix configuration mismatches, such as the Logic App worker runtime setting.
-- Run `what-if` and a test deployment in `public` mode, then in `private` mode.
+Goal: a working public-mode deployment, end to end, with `azd up`. Then the
+first private-mode deployment. Fix whatever real Azure surfaces.
+
+**Starting state:** see "Implementation handoff" below. The `p3dev` azd
+environment is ready for swedencentral. A previous attempt in Canada Central
+and Canada East was blocked by Cosmos DB regional capacity, and both
+environments were torn down.
+
+**Tasks, in order:**
+
+1. **Fix known bugs before deploying** (details under "Known issues"):
+   - Make the blob trigger connection use the user-assigned identity (K1).
+   - Align the Logic App worker runtime between infrastructure and local
+     settings (K2).
+   - Add the `scripts/` checks to CI (K6).
+2. **Public deployment:**
+   - Run `azd provision`. The preprovision hook reuses the existing app
+     registration; the postprovision hook must add the redirect URI and the
+     federated credential.
+   - Fix template errors as they appear. Rerun until provisioning succeeds.
+   - Run `azd deploy` (both the `web` and `logic` services).
+3. **End-to-end checks (public):**
+   - `GET /api/health` returns 200 without sign-in. Other routes redirect to
+     Entra sign-in, and sign-in works in a browser.
+   - Uploading a PDF to the `documents` container fires the Logic App, and
+     the HTTP action reaches the API through Easy Auth using the user-assigned
+     identity (K3). Confirm the trigger path behaviour, including
+     subfolders (K4).
+   - The API calls Document Intelligence, the Foundry model, Search, and
+     Cosmos DB with managed identity. Local auth is off on all AI services
+     (K5).
+   - `samples/create_agent.py` creates an agent with the deployment outputs.
+   - Re-run `azd provision`. It must be idempotent: no image reset, and no
+     duplicate app registration or credential.
+4. **Foundry Agent Service in private mode (K7):** add an optional delegated
+   agent subnet input (`privateNetwork.agentSubnetId`) and the account
+   `networkInjections`. Add the role assignments that are required after the
+   capability host exists (Cosmos DB container-scoped data roles, Storage blob
+   conditions), following the official standard-agent-setup template.
+5. **Private deployment:** run `what-if`, then deploy in `private` mode into a
+   test VNet that you own and that simulates the PBMM/ALZ network (it lives
+   outside the accelerator). App code must be deployed from a machine or
+   runner that can reach the private network. Document anything a platform
+   team must provide.
+6. **Re-review authorization** (from `docs/review.md`): confirm that role
+   assignments and Easy Auth still work when resource group names, resource
+   names, tenant, or auth tenant are overridden.
+
+**Done when:** public mode works end to end with `azd up` from a clean
+environment; private mode provisions successfully, and its checks pass from
+inside the network; all fixes are committed; `docs/plan.md` and the README
+reflect what was learned.
 
 ### Phase 4 — Reuse of existing resources
 
-- `new` or `existing` mode for Foundry/OpenAI, Document Intelligence, and AI
-  Search.
-- Private endpoints for existing AI resources, independent of whether the
-  accelerator created them.
-- Wire up the Azure Monitor Private Link Scope (AMPLS) supplied for
-  `existing` monitoring, or document clearly that its owner manages it.
-- Diagnostic settings on all resources when monitoring is enabled.
+Goal: let a solution plug in AI and monitoring resources that already exist.
+
+- **AI resource mode:** add `new` or `existing` per service: Foundry account
+  (or Azure OpenAI), Document Intelligence, and AI Search. Use a typed object
+  per service in `types.bicep`, e.g. `{ mode: 'new' | 'existing', resourceId? }`.
+  For `existing`:
+  - Reference the resource by ID; it can be in another subscription or
+    resource group.
+  - Skip creating it and its model deployments. Model deployments must already
+    exist, but the template still validates that the chat deployment name is
+    in the list.
+  - Still assign the workload and developer roles. Cross-subscription role
+    assignments need a module scoped to that resource group.
+  - Still create the project, connections, and capability host when the
+    Foundry account is new. An existing Foundry project is a stretch goal.
+- **Private endpoints for existing AI resources:** create them in private mode
+  whether or not the accelerator created the resource. Do not change the
+  public network access of a resource the accelerator doesn't own; document
+  this instead.
+- **AMPLS for `existing` monitoring (K8):** `existingMonitoring.azureMonitorPrivateLinkScopeId`
+  is accepted but unused. Pick one approach and document it: either add
+  scoped resources and a private endpoint to the supplied AMPLS (needs
+  permission on it), or state that the AMPLS owner does this.
+- **Diagnostic settings (K9):** only the web app has them. Add them for the
+  Logic App, storage (blob service), Cosmos DB, ACR, Foundry, Document
+  Intelligence, and Search, sent to the selected workspace when
+  `monitoringMode != 'none'`.
+- Update `main.bicepparam`, the example parameter files, the README, and
+  `check_parameter_files.py` for every new input.
+
+**Done when:** `what-if` succeeds for new and existing AI resources in both
+network modes, and one deployment with an existing AI Search (or Document
+Intelligence) works end to end.
 
 ### Phase 5 — Usability and validation
 
-- Format checks on resource IDs and other inputs. The typed parameters
-  themselves are introduced in Phase 2.
-- A network contract document listing what PBMM/ALZ must provide: subnets,
-  delegations, NSG rules, routing, and private DNS zones.
-- Test the mode combinations (network × monitoring × new/existing AI ×
-  SKU/model overrides) using
-  `what-if` and parameter tests that check invalid inputs are rejected.
-- Tests for the real Azure path in the API, and checks for the Logic App
-  workflow.
-- Template guidance: how to rename, extend, and add workflows or agents.
+- **Input format checks:** validate resource IDs (subnet, DNS zone,
+  workspace, ASE, existing AI resources) with `fail()` in `main.bicep`. Check
+  the resource provider and type segments, not just that the value is
+  non-empty.
+- **Network contract document** (`docs/network-contract.md`) listing what
+  PBMM/ALZ must provide:
+  - Subnets: private endpoints, web integration, Logic App integration, and
+    the Foundry agent subnet, with sizes and required delegations
+    (`Microsoft.Web/serverFarms`, and `Microsoft.App/environments` for the
+    agent subnet).
+  - NSG rules, UDR and egress requirements: Entra ID, the ACR data endpoint,
+    and Azure Monitor.
+  - The full private DNS zone list, mapped to the `privateDnsZoneIds` keys,
+    plus sovereign-cloud zone names (K10).
+  - The roles the deployment identity needs on the network and DNS resource
+    groups.
+- **Mode-matrix tests:** a script that runs `az deployment sub validate` or
+  `what-if` across network × monitoring × AI mode × SKU and model overrides.
+  It should also check that invalid inputs are rejected; reuse the six Phase 2
+  negative cases and extend the list. Make it runnable manually or in CI with
+  Azure credentials.
+- **Tests for the real Azure path in the API:** add unit tests for
+  `AzureDocumentProcessor` (`app/backend/src/accelerator/services/processor.py`)
+  with the Azure SDK clients mocked. Extend `validate_logic_app.py` to check
+  that `connections.json` and the workflow use the identity app setting.
+- **Template guidance** (`docs/extending.md`): how to rename the app, add a
+  workflow, add a model deployment, add an agent, and replace the sample
+  API/UI. Also how to move the repo out as an accelerator.
+
+**Done when:** `./scripts/verify.sh` and CI cover the new tests; the
+mode-matrix script passes; the docs exist and are linked from the README.
 
 ### Future enhancements
 
@@ -151,6 +233,120 @@ grouped, typed parameters instead of ~115 flat ones.
 - Resiliency: zone redundancy, backup, and multi-region options.
 - Custom RBAC roles, and role assignments scoped to individual resources.
 - Search shared private links, for indexers and skillsets.
+
+## Implementation handoff
+
+Context for an agent or engineer picking up Phase 3 or later.
+
+### Repository and tooling
+
+- **Repo:** `/home/lucrawford/src/work/goa/logic-app-ai-accelerator`. It is
+  standalone; it was derived from an analysis of the
+  `document-review-platform` infrastructure, but no business logic was
+  carried over.
+- **Layout:**
+  - `infra/main.bicep` — subscription-scope composition root. It creates three
+    resource groups and holds the validations, role assignments, and outputs.
+  - `infra/types.bicep` — shared exported types.
+  - `infra/main.bicepparam` — azd environment variable mapping.
+  - `infra/modules/{application,ai,monitoring,networking,shared}` — modules.
+  - `app/backend` — Quart API with a mock/Azure processor switch,
+    `ACCELERATOR_MOCK_SERVICES`.
+  - `app/frontend` — React and Vite.
+  - `app/logic` — Logic Apps Standard project.
+  - `scripts/` — `verify.sh`, the parameter checks, the Logic App validator,
+    and `hooks/app_registration.py` with tests.
+- **Verify:** run `./scripts/verify.sh`. It builds the Bicep, type-checks
+  `main.bicepparam` and the example files, validates the Logic App, and runs
+  ruff and pytest (backend and scripts) and the frontend tests, lint, and
+  build. It must stay green.
+- **Tools:** Bicep CLI 0.44.x, azd 1.28.x, Python 3.12 (`.venv`), Node 20.
+- **Way of working:**
+  - Commit at regular intervals, with Co-authored-by trailers.
+  - Stop and get confirmation before moving to the next phase.
+  - Keep changes application-focused: never create hub networking, a
+    firewall, or central DNS.
+
+### Current Azure environment
+
+- **Subscription:** `ME-MngEnvMCAP010603-lucrawford-1`
+  (`bfa88b00-5760-4934-8c13-19988faa8563`).
+- **Tenant:** `043282d2-4515-4bb6-b36d-219dce194997`.
+- **azd environment `p3dev`**, currently empty in Azure:
+  - `AZURE_LOCATION=swedencentral`, `AZURE_NETWORK_MODE=public`.
+  - Dev SKUs: `AZURE_WEB_APP_SKU=B1`, `AZURE_CONTAINER_REGISTRY_SKU=Basic`,
+    `AZURE_SEARCH_SKU=basic`.
+  - `AZURE_USE_APP_SERVICE_AUTH=true`, with
+    `AZURE_APP_SERVICE_AUTH_CLIENT_ID=d5819619-eeee-4524-88f2-ddcab8399aa2`
+    (app registration `aiaccel-p3dev-web`, created by the hook).
+  - swedencentral offers gpt-4.1-mini `2025-04-14` GlobalStandard and AI
+    Search.
+- **Resource names** include a token derived from the location, so changing
+  region changes every name.
+- **Clean up** with `azd down --force --purge`. The app registration survives
+  `azd down` and is reused.
+- **If Cosmos DB fails with "high demand":** delete the failed account before
+  retrying, because a failed account blocks re-creation.
+
+### Bicep and azd conventions and gotchas
+
+- **Validations:** use `fail()` inside ternaries on variables, so ARM rejects
+  bad input at template validation. `assert` is not used. Keep multi-line
+  boolean expressions on one line.
+- **Typed parameters:** grouped objects with optional properties (`?`).
+  Resolve defaults with `valueOrDefault()` or `??` in `main.bicep`. An empty
+  string means "not set".
+- **Role assignment names** must be computable at deployment start, so
+  role assignments across resource groups go through
+  `modules/shared/role-assignment.bicep`, called from the subscription scope.
+- **Existing-resource names** must be known at start. Don't use module
+  outputs as an `existing` resource name (error BCP307); use the resolved
+  `names.*` plus `dependsOn`.
+- **`.bicepparam` files** don't allow user-defined functions or
+  `environment()`. `json()` is evaluated eagerly, so give JSON environment
+  variables a valid default (`'[]'` or `'{}'`).
+- **azd:**
+  - Services `web` (Docker, remote build) and `logic` (`host: function`,
+    `language: js`; `app/logic/package.json` exists only for packaging and is
+    excluded by `.funcignore`).
+  - Services are matched by the `azd-service-name` tag.
+  - azd injects `AZURE_PRINCIPAL_ID`. `SERVICE_WEB_IMAGE_NAME` is fed back
+    into `webContainerImage`.
+- **Outputs** use azd-style `UPPER_SNAKE_CASE`. `.github/workflows/deploy.yml`
+  and `samples/README.md` read them.
+- **Preview APIs:** Foundry capability hosts and connections use preview API
+  versions. `capabilityHostKind` needs `#disable-next-line BCP037`.
+
+### Identity model
+
+| Principal | Used for | Roles (scope) |
+|---|---|---|
+| Web system-assigned identity | API calls to Storage, Cosmos DB, AI (`DefaultAzureCredential`; `AZURE_CLIENT_ID` is not set) | AcrPull, Storage Blob Data Contributor (app resource group); OpenAI User, Cognitive Services User, Search Index Data Contributor (AI resource group); Cosmos DB data role |
+| Web user-assigned identity | Easy Auth federated credential only (`OVERRIDE_USE_MI_FIC_ASSERTION_CLIENTID`) | None |
+| Logic App user-assigned identity | `AzureWebJobsStorage`, the HTTP call to the API (`WORKFLOWS_IDENTITY_RESOURCE_ID`), and the blob trigger (after K1) | Storage Blob, Queue, Table, and File data roles (app resource group). Its client ID is in Easy Auth `allowedApplications` |
+| Foundry project system-assigned identity | Agent Service storage, threads, and vector store | Storage Blob Data Contributor, Cosmos DB Operator, Search Index Data Contributor, Search Service Contributor |
+| Developer (`identity.principalId`) | Local development and samples | Storage Blob Data Contributor, AcrPush, Azure AI User, OpenAI User, Cognitive Services User, Search roles, Cosmos DB data role |
+
+Role assignments are scoped to the resource group. Resource-level scoping is a
+future enhancement.
+
+### Known issues
+
+| ID | Issue | Location | Phase |
+|---|---|---|---|
+| K1 | **Bug:** the blob trigger connection uses `ManagedServiceIdentity` without an identity, so it runs as the Logic App system-assigned identity, which has no storage roles. Add `"identity": "@appsetting('WORKFLOWS_IDENTITY_RESOURCE_ID')"` to `authProvider`, or give the system-assigned identity the roles. | `app/logic/connections.json` | 3 |
+| K2 | `FUNCTIONS_WORKER_RUNTIME` is `dotnet` in infrastructure but `node` in `local.settings.example.json`. Pick the supported value for Logic Apps Standard and use it in both places. | `infra/modules/application/compute.bicep` (~line 127), `app/logic/local.settings.example.json` | 3 |
+| K3 | Not yet confirmed: a parameterized `identity` (`@appsetting(...)`) on the HTTP action works in Standard. If it doesn't, put the resource ID in `parameters.json` or hard-code it at deploy time. | `app/logic/workflows/process-document/workflow.json` | 3 |
+| K4 | The blob trigger `path` is `documents/{name}.pdf`. Check whether it fires for subfolders, and how `{name}` resolves. | Same workflow | 3 |
+| K5 | `disableLocalAuth: true` on Foundry, Document Intelligence, and Search. Confirm that the agent capability host and samples work this way. | `infra/modules/ai/stack.bicep` | 3 |
+| K6 | CI doesn't run `check_parameter_files.py`, the `scripts/` ruff check, or the `scripts/tests` pytest run, which `verify.sh` does. | `.github/workflows/ci.yml` | 3 |
+| K7 | Private mode has no Foundry agent subnet, `networkInjections`, or post-capability-host roles. | `infra/modules/ai/stack.bicep`, `infra/types.bicep` | 3 |
+| K8 | `existingMonitoring.azureMonitorPrivateLinkScopeId` is accepted but unused. | `infra/main.bicep`, `infra/modules/monitoring/stack.bicep` | 4 |
+| K9 | Only the web app has diagnostic settings. | All modules | 4 |
+| K10 | Public-cloud names are hard-coded: private DNS zone names in `main.bicepparam` (override with `AZURE_PRIVATE_DNS_ZONE_IDS`) and the `foundryOpenAiEndpoint` output (`openai.azure.com`). | `infra/main.bicepparam`, `infra/modules/ai/stack.bicep` | 5 |
+| K11 | **Unconfirmed assumptions:** a Logic App on an ASE uses a Windows plan with an `I*v2` SKU; apps on an ASE get no private endpoint; Document Intelligence F0 supports private endpoints; App Service plan `tier` can be omitted. | `infra/modules/application/compute.bicep`, `infra/main.bicep` | 3–5 |
+| K12 | The web IP allow-list adds the Logic App's current outbound IPs (not all possible outbound IPs). The SCM site is intentionally unrestricted so CI can deploy. | `infra/modules/application/compute.bicep` | 5 |
+| K13 | With Easy Auth enabled, the GitHub Actions deploy workflow doesn't run the hooks. The app registration must be created separately. | `.github/workflows/deploy.yml` | 5 |
 
 ## Out of scope
 
@@ -167,5 +363,5 @@ grouped, typed parameters instead of ~115 flat ones.
   region access before the first deployment.
 - Private-mode deployment of app code needs a self-hosted runner that can reach
   the private network.
-- Nothing has been deployed to Azure yet, so runtime behaviour is unverified
-  until Phase 3.
+- Nothing has been deployed to Azure successfully yet, so runtime behaviour
+  is unverified until Phase 3.
