@@ -1,0 +1,110 @@
+# Logic App AI Accelerator — High-Level Plan
+
+## Purpose
+
+A reusable, application-focused starter for Azure solutions built on Logic Apps
+Standard, a web app/API, Azure AI Foundry (agents), Document Intelligence, and
+Azure AI Search. It is meant to be cloned into new projects and to deploy into
+either a public dev/test setup or an existing PBMM / Azure Landing Zone network.
+
+## Guiding principles
+
+- **Application-focused.** Do not recreate PBMM/ALZ platform services (hub
+  networking, firewall and egress, central DNS, policy). Consume them by
+  resource ID.
+- **Explicit modes and validated inputs.** Networking and monitoring use
+  explicit modes. Deployment fails early when required inputs for the selected
+  mode are missing.
+- **Independent concerns.** Private networking, monitoring, and the creation of
+  AI resources can each be switched on or off without depending on the others.
+- **Identity first.** Use managed identities and Entra ID (data-plane) roles,
+  and turn off local/key authentication wherever possible.
+- **Standard resource group layout.**
+  - `rg-<app>-<env>`: web app, Logic App, storage, Cosmos DB, container registry
+  - `rg-<app>-ai-<env>`: Foundry, Document Intelligence, AI Search
+  - `rg-<app>-ops-<env>`: Log Analytics, Application Insights, Azure Monitor
+    Private Link Scope (AMPLS)
+
+## Deployment modes
+
+| Setting | Modes | Notes |
+|---|---|---|
+| `networkMode` | `public`, `private` | `private` integrates with subnets and private DNS zones provided by PBMM/ALZ, which can be in another subscription. Private endpoints and VNet integration use separate subnets. After private connectivity is set up, public access to PaaS services is turned off. |
+| `monitoringMode` | `none`, `new`, `existing` | `existing` links to an Application Insights / Log Analytics workspace that is already deployed. Monitoring is independent of `networkMode`. |
+| AI resource mode *(planned)* | `new`, `existing` | Each AI service can either be created or reused, with private endpoints configured separately from creation. |
+
+## Phases
+
+### Phase 1 — Initial implementation (complete, not yet deployed)
+
+- Public and private network modes, with validation.
+- Subnets and DNS zones passed as resource IDs, so they can live in another
+  subscription.
+- Monitoring modes `none`, `new`, and `existing`.
+- Separate resource groups for app, AI, and operations resources.
+- Foundry (account, project, model deployment, connections, capability hosts),
+  Document Intelligence, AI Search.
+- Sample web app (Quart API and React UI), a sample Logic App workflow, and a
+  sample Foundry agent.
+- CI workflow for build, lint, and tests, plus a GitHub Actions deployment
+  workflow.
+
+### Phase 2 — Hardening and first deployment
+
+- Authenticate the API endpoint the Logic App calls (App Service built-in
+  authentication, "Easy Auth", using the Logic App's managed identity).
+- Add user sign-in to the web app.
+- Foundry Agent Service in private mode: add the input for its delegated agent
+  subnet, plus the post-capability-host roles on Cosmos DB and Storage.
+- Confirm the Foundry local-authentication setting and the Logic App trigger
+  path in a real environment.
+- Fix configuration mismatches, such as the Logic App worker runtime setting.
+- Run `what-if` and a test deployment in `public` mode, then in `private` mode.
+
+### Phase 3 — Reuse of existing resources
+
+- `new` or `existing` mode for Foundry/OpenAI, Document Intelligence, and AI
+  Search.
+- Private endpoints for existing AI resources, independent of whether the
+  accelerator created them.
+- Wire up the Azure Monitor Private Link Scope (AMPLS) supplied for
+  `existing` monitoring, or document clearly that its owner manages it.
+- Diagnostic settings on all resources when monitoring is enabled.
+
+### Phase 4 — Usability and validation
+
+- Typed Bicep parameters for each mode, and format checks on resource IDs.
+- A network contract document listing what PBMM/ALZ must provide: subnets,
+  delegations, NSG rules, routing, and private DNS zones.
+- Test the mode combinations (network × monitoring × new/existing AI) using
+  `what-if` and parameter tests that check invalid inputs are rejected.
+- Tests for the real Azure path in the API, and checks for the Logic App
+  workflow.
+- Template guidance: how to rename, extend, and add workflows or agents.
+
+### Future enhancements
+
+- `private-managed` network mode: a minimal VNet, separate integration and
+  private-endpoint subnets, private DNS zones, and an NSG option of `create`,
+  `existing`, or `none` (with private endpoint network policies enabled when an
+  NSG is expected).
+- Key Vault for secrets, plus a Key Vault private endpoint.
+- Resiliency: zone redundancy, backup, and multi-region options.
+- Custom RBAC roles, and role assignments scoped to individual resources.
+- Search shared private links, for indexers and skillsets.
+
+## Out of scope
+
+- Hub networking, firewall and egress, and central DNS (PBMM/ALZ provides
+  these).
+- Migrating the document-review business logic. The accelerator ships generic
+  samples only.
+
+## Key risks
+
+- Some Foundry capability host and Agent Service networking APIs are in preview
+  and may change.
+- Private-mode deployment of app code needs a self-hosted runner that can reach
+  the private network.
+- Nothing has been deployed to Azure yet, so runtime behaviour is unverified
+  until Phase 2.
