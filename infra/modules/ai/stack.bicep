@@ -4,7 +4,6 @@ param tags object
 param networkMode string
 param privateEndpointSubnetId string = ''
 param privateDnsZoneIds object = {}
-param applicationResourceGroupName string
 param storageName string
 param storageId string
 param storageBlobEndpoint string
@@ -19,16 +18,6 @@ param modelCapacity int = 10
 var privateMode = networkMode == 'private'
 var foundryName = 'aif-${resourceToken}'
 var searchName = 'srch-${resourceToken}'
-
-resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' existing = {
-  name: storageName
-  scope: resourceGroup(applicationResourceGroupName)
-}
-
-resource cosmos 'Microsoft.DocumentDB/databaseAccounts@2024-11-15' existing = {
-  name: cosmosName
-  scope: resourceGroup(applicationResourceGroupName)
-}
 
 resource foundry 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' = {
   name: foundryName
@@ -184,6 +173,7 @@ resource accountCapabilityHost 'Microsoft.CognitiveServices/accounts/capabilityH
   parent: foundry
   name: 'agents'
   properties: {
+    #disable-next-line BCP037
     capabilityHostKind: 'Agents'
   }
 }
@@ -192,6 +182,7 @@ resource projectCapabilityHost 'Microsoft.CognitiveServices/accounts/projects/ca
   parent: project
   name: 'agents'
   properties: {
+    #disable-next-line BCP037
     capabilityHostKind: 'Agents'
     storageConnections: [
       storageName
@@ -206,58 +197,6 @@ resource projectCapabilityHost 'Microsoft.CognitiveServices/accounts/projects/ca
   dependsOn: [
     accountCapabilityHost
   ]
-}
-
-resource storageBlobContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(storage.id, project.identity.principalId, 'storage-blob-data-contributor')
-  scope: storage
-  properties: {
-    principalId: project.identity.principalId
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: subscriptionResourceId(
-      'Microsoft.Authorization/roleDefinitions',
-      'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
-    )
-  }
-}
-
-resource cosmosOperator 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(cosmos.id, project.identity.principalId, 'cosmos-operator')
-  scope: cosmos
-  properties: {
-    principalId: project.identity.principalId
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: subscriptionResourceId(
-      'Microsoft.Authorization/roleDefinitions',
-      '230815da-be43-4aae-9cb4-875f7bd000aa'
-    )
-  }
-}
-
-resource searchIndexContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(search.id, project.identity.principalId, 'search-index-data-contributor')
-  scope: search
-  properties: {
-    principalId: project.identity.principalId
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: subscriptionResourceId(
-      'Microsoft.Authorization/roleDefinitions',
-      '8ebe5a00-799e-43f5-93ac-243d3dce84a7'
-    )
-  }
-}
-
-resource searchServiceContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(search.id, project.identity.principalId, 'search-service-contributor')
-  scope: search
-  properties: {
-    principalId: project.identity.principalId
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: subscriptionResourceId(
-      'Microsoft.Authorization/roleDefinitions',
-      '7ca78c08-252a-4471-8644-bb5ff32d4ba0'
-    )
-  }
 }
 
 module foundryPe '../networking/private-endpoint.bicep' = if (privateMode) {
@@ -325,4 +264,3 @@ output searchId string = search.id
 output searchEndpoint string = 'https://${search.name}.search.windows.net'
 output searchName string = search.name
 output modelDeploymentName string = modelDeployment.name
-

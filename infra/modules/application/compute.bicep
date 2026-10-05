@@ -6,21 +6,12 @@ param privateEndpointSubnetId string = ''
 param webIntegrationSubnetId string = ''
 param logicIntegrationSubnetId string = ''
 param privateDnsZoneIds object = {}
-param storageId string
-param storageName string
 param storageBlobEndpoint string
 param logicStorageId string
-param logicStorageName string
-param cosmosId string
-param cosmosName string
 param cosmosEndpoint string
-param registryId string
 param registryLoginServer string
-param foundryId string
 param foundryOpenAiEndpoint string
-param documentIntelligenceId string
 param documentIntelligenceEndpoint string
-param searchId string
 param searchEndpoint string
 param modelDeploymentName string
 param monitoringMode string
@@ -31,37 +22,6 @@ param backendApiAudience string = 'api://logic-app-ai-accelerator'
 var privateMode = networkMode == 'private'
 var webName = 'app-${resourceToken}'
 var logicName = 'logic-${resourceToken}'
-
-resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' existing = {
-  name: storageName
-}
-
-resource logicStorage 'Microsoft.Storage/storageAccounts@2023-05-01' existing = {
-  name: logicStorageName
-}
-
-resource cosmos 'Microsoft.DocumentDB/databaseAccounts@2024-11-15' existing = {
-  name: cosmosName
-}
-
-resource registry 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = {
-  name: last(split(registryId, '/'))
-}
-
-resource foundry 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' existing = {
-  name: last(split(foundryId, '/'))
-  scope: resourceGroup(split(foundryId, '/')[4])
-}
-
-resource documentIntelligence 'Microsoft.CognitiveServices/accounts@2024-10-01' existing = {
-  name: last(split(documentIntelligenceId, '/'))
-  scope: resourceGroup(split(documentIntelligenceId, '/')[4])
-}
-
-resource search 'Microsoft.Search/searchServices@2024-06-01-preview' existing = {
-  name: last(split(searchId, '/'))
-  scope: resourceGroup(split(searchId, '/')[4])
-}
 
 resource webPlan 'Microsoft.Web/serverfarms@2024-04-01' = {
   name: 'plan-web-${resourceToken}'
@@ -256,116 +216,6 @@ module logic 'br/public:avm/res/web/site:0.16.0' = {
   }
 }
 
-resource webAcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(registry.id, web.identity.principalId, 'acr-pull')
-  scope: registry
-  properties: {
-    principalId: web.identity.principalId
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: subscriptionResourceId(
-      'Microsoft.Authorization/roleDefinitions',
-      '7f951dda-4ed3-4680-a7ca-43fe172d538d'
-    )
-  }
-}
-
-resource webStorageContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(storage.id, web.identity.principalId, 'storage-blob-data-contributor')
-  scope: storage
-  properties: {
-    principalId: web.identity.principalId
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: subscriptionResourceId(
-      'Microsoft.Authorization/roleDefinitions',
-      'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
-    )
-  }
-}
-
-resource webFoundryUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(foundry.id, web.identity.principalId, 'cognitive-services-openai-user')
-  scope: foundry
-  properties: {
-    principalId: web.identity.principalId
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: subscriptionResourceId(
-      'Microsoft.Authorization/roleDefinitions',
-      '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd'
-    )
-  }
-}
-
-resource webDocumentIntelligenceUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(documentIntelligence.id, web.identity.principalId, 'cognitive-services-user')
-  scope: documentIntelligence
-  properties: {
-    principalId: web.identity.principalId
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: subscriptionResourceId(
-      'Microsoft.Authorization/roleDefinitions',
-      'a97b65f3-24c7-4388-baec-2e87135dc908'
-    )
-  }
-}
-
-resource webSearchContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(search.id, web.identity.principalId, 'search-index-data-contributor')
-  scope: search
-  properties: {
-    principalId: web.identity.principalId
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: subscriptionResourceId(
-      'Microsoft.Authorization/roleDefinitions',
-      '8ebe5a00-799e-43f5-93ac-243d3dce84a7'
-    )
-  }
-}
-
-resource webCosmosDataContributor 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2024-11-15' = {
-  name: guid(cosmos.id, web.identity.principalId, 'cosmos-data-contributor')
-  parent: cosmos
-  properties: {
-    principalId: web.identity.principalId
-    roleDefinitionId: '${cosmos.id}/sqlRoleDefinitions/00000000-0000-0000-0000-000000000002'
-    scope: cosmos.id
-  }
-}
-
-var logicStorageRoles = [
-  'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
-  '974c5e8b-45b9-4653-ba55-5f855dd0fb88'
-  '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3'
-  '69566ab7-960f-475b-8e7c-b3118f30c6bd'
-]
-
-resource logicStorageRoleAssignments 'Microsoft.Authorization/roleAssignments@2022-04-01' = [
-  for roleId in logicStorageRoles: {
-    name: guid(logicStorage.id, logicIdentity.properties.principalId, roleId)
-    scope: logicStorage
-    properties: {
-      principalId: logicIdentity.properties.principalId
-      principalType: 'ServicePrincipal'
-      roleDefinitionId: subscriptionResourceId(
-        'Microsoft.Authorization/roleDefinitions',
-        roleId
-      )
-    }
-  }
-]
-
-resource logicApplicationStorageContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(storage.id, logicIdentity.properties.principalId, 'storage-blob-data-contributor')
-  scope: storage
-  properties: {
-    principalId: logicIdentity.properties.principalId
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: subscriptionResourceId(
-      'Microsoft.Authorization/roleDefinitions',
-      'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
-    )
-  }
-}
-
 resource webDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (monitoringMode != 'none') {
   name: 'default'
   scope: web
@@ -425,4 +275,3 @@ output webUri string = 'https://${web.properties.defaultHostName}'
 output logicName string = logicName
 output webPrincipalId string = web.identity.principalId
 output logicPrincipalId string = logicIdentity.properties.principalId
-

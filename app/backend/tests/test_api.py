@@ -1,6 +1,7 @@
 from io import BytesIO
 
 import pytest
+from werkzeug.datastructures import FileStorage
 
 from accelerator.app import create_app
 from accelerator.config import Settings
@@ -32,7 +33,13 @@ async def test_upload_and_process_document(app):
     client = app.test_client()
     upload = await client.post(
         "/api/documents",
-        files={"document": (BytesIO(b"%PDF sample"), "sample.pdf", "application/pdf")},
+        files={
+            "document": FileStorage(
+                stream=BytesIO(b"%PDF sample"),
+                filename="sample.pdf",
+                content_type="application/pdf",
+            )
+        },
     )
     assert upload.status_code == 202
     queued = await upload.get_json()
@@ -51,7 +58,13 @@ async def test_upload_and_process_document(app):
 async def test_upload_rejects_non_pdf(app):
     response = await app.test_client().post(
         "/api/documents",
-        files={"document": (BytesIO(b"text"), "sample.txt", "text/plain")},
+        files={
+            "document": FileStorage(
+                stream=BytesIO(b"text"),
+                filename="sample.txt",
+                content_type="text/plain",
+            )
+        },
     )
     assert response.status_code == 415
     body = await response.get_json()
@@ -62,4 +75,3 @@ async def test_upload_rejects_non_pdf(app):
 async def test_missing_job_returns_not_found(app):
     response = await app.test_client().get("/api/jobs/unknown")
     assert response.status_code == 404
-

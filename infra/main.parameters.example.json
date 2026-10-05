@@ -1,0 +1,43 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "appName": {
+      "value": "aiaccelerator"
+    },
+    "environmentName": {
+      "value": "dev"
+    },
+    "location": {
+      "value": "eastus2"
+    },
+    "networkMode": {
+      "value": "public"
+    },
+    "monitoringMode": {
+      "value": "new"
+    },
+    "privateNetwork": {
+      "value": {
+        "privateEndpointSubnetId": "",
+        "webIntegrationSubnetId": "",
+        "logicIntegrationSubnetId": "",
+        "privateDnsZoneIds": {}
+      }
+    },
+    "existingMonitoring": {
+      "value": {
+        "applicationInsightsConnectionString": "",
+        "logAnalyticsWorkspaceId": "",
+        "azureMonitorPrivateLinkScopeId": ""
+      }
+    },
+    "tags": {
+      "value": {
+        "CostCenter": "replace-me",
+        "TechnicalOwner": "replace-me"
+      }
+    }
+  }
+}
+

@@ -1,9 +1,10 @@
-import { render, screen } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, test, vi } from 'vitest'
 import { DocumentProcessor } from '../components/DocumentProcessor'
 
 afterEach(() => {
+  cleanup()
   vi.restoreAllMocks()
 })
 
@@ -42,4 +43,3 @@ test('shows a validation error when no document is selected', async () => {
   await userEvent.click(screen.getByRole('button', { name: /upload and process/i }))
   expect(screen.getByRole('alert')).toHaveTextContent(/choose a pdf/i)
 })
-

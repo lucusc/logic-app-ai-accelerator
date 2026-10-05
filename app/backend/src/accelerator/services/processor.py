@@ -66,9 +66,18 @@ class MockDocumentProcessor:
 class AzureDocumentProcessor:
     def __init__(self, settings: Settings) -> None:
         from azure.ai.documentintelligence.aio import DocumentIntelligenceClient
+        from azure.core.exceptions import ResourceExistsError
+        from azure.cosmos import PartitionKey
         from azure.cosmos.aio import CosmosClient
         from azure.identity.aio import DefaultAzureCredential
         from azure.search.documents.aio import SearchClient
+        from azure.search.documents.indexes.aio import SearchIndexClient
+        from azure.search.documents.indexes.models import (
+            SearchableField,
+            SearchFieldDataType,
+            SearchIndex,
+            SimpleField,
+        )
         from azure.storage.blob.aio import BlobServiceClient
         from openai import AsyncAzureOpenAI
 
@@ -82,10 +91,27 @@ class AzureDocumentProcessor:
         self._search = SearchClient(
             settings.search_endpoint, settings.search_index, self._credential
         )
+        self._search_indexes = SearchIndexClient(settings.search_endpoint, self._credential)
         self._openai = AsyncAzureOpenAI(
             azure_endpoint=settings.foundry_openai_endpoint,
             azure_ad_token_provider=self._get_openai_token,
             api_version="2025-04-01-preview",
+        )
+        self._partition_key = PartitionKey(path="/id")
+        self._resource_exists_error = ResourceExistsError
+        self._search_index = SearchIndex(
+            name=settings.search_index,
+            fields=[
+                SimpleField(name="id", type=SearchFieldDataType.String, key=True),
+                SimpleField(
+                    name="jobId",
+                    type=SearchFieldDataType.String,
+                    filterable=True,
+                ),
+                SearchableField(name="fileName", type=SearchFieldDataType.String),
+                SearchableField(name="content", type=SearchFieldDataType.String),
+                SearchableField(name="summary", type=SearchFieldDataType.String),
+            ],
         )
 
     async def _get_openai_token(self) -> str:
@@ -98,14 +124,20 @@ class AzureDocumentProcessor:
         )
         return await database.create_container_if_not_exists(
             id=self._settings.cosmos_container,
-            partition_key={"paths": ["/id"], "kind": "Hash"},
+            partition_key=self._partition_key,
         )
+
+    async def _ensure_search_index(self) -> None:
+        await self._search_indexes.create_or_update_index(self._search_index)
 
     async def upload(self, file_name: str, content: bytes) -> Job:
         job_id = str(uuid4())
         blob_name = f"{job_id}/{file_name}"
         container = self._blob.get_container_client(self._settings.submissions_container)
-        await container.create_container()
+        try:
+            await container.create_container()
+        except self._resource_exists_error:
+            pass
         await container.upload_blob(blob_name, content, overwrite=False)
         job = Job(
             id=job_id,
@@ -147,6 +179,7 @@ class AzureDocumentProcessor:
             ],
         )
         summary = response.output_text
+        await self._ensure_search_index()
         search_id = hashlib.sha256(job_id.encode()).hexdigest()
         await self._search.upload_documents(
             [
@@ -181,4 +214,3 @@ def create_processor(settings: Settings) -> DocumentProcessor:
     if settings.mock_services:
         return MockDocumentProcessor()
     return AzureDocumentProcessor(settings)
-

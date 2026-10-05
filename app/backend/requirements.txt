@@ -3,7 +3,7 @@ azure-cosmos==4.9.0
 azure-identity==1.25.1
 azure-search-documents==11.6.0
 azure-storage-blob==12.26.0
+hypercorn==0.17.3
 openai==2.2.0
 quart==0.20.0
 quart-cors==0.8.0
-

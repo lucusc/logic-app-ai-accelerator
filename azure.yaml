@@ -5,16 +5,10 @@ infra:
   provider: bicep
   path: infra
 services:
-  api:
-    project: app/backend
+  accelerator:
+    project: .
     host: appservice
-    language: python
-  web:
-    project: app/frontend
-    host: appservice
-    language: js
-  logic:
-    project: app/logic
-    host: function
-    language: dotnet
-
+    language: docker
+    docker:
+      path: app/backend/Dockerfile
+      context: .

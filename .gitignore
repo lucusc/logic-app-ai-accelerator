@@ -8,8 +8,11 @@ __pycache__/
 htmlcov/
 node_modules/
 dist/
+*.tsbuildinfo
+app/frontend/vite.config.js
+app/frontend/vite.config.d.ts
 app/backend/static/
 app/logic/local.settings.json
 app/logic/.func/
+infra/main.json
 .DS_Store
-

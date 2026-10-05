@@ -1,0 +1,53 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "appName": {
+      "value": "aiaccelerator"
+    },
+    "environmentName": {
+      "value": "prod"
+    },
+    "location": {
+      "value": "eastus2"
+    },
+    "networkMode": {
+      "value": "private"
+    },
+    "monitoringMode": {
+      "value": "existing"
+    },
+    "privateNetwork": {
+      "value": {
+        "privateEndpointSubnetId": "/subscriptions/<subscription>/resourceGroups/<network-rg>/providers/Microsoft.Network/virtualNetworks/<vnet>/subnets/<private-endpoints>",
+        "webIntegrationSubnetId": "/subscriptions/<subscription>/resourceGroups/<network-rg>/providers/Microsoft.Network/virtualNetworks/<vnet>/subnets/<web-integration>",
+        "logicIntegrationSubnetId": "/subscriptions/<subscription>/resourceGroups/<network-rg>/providers/Microsoft.Network/virtualNetworks/<vnet>/subnets/<logic-integration>",
+        "privateDnsZoneIds": {
+          "blob": "/subscriptions/<subscription>/resourceGroups/<dns-rg>/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net",
+          "file": "/subscriptions/<subscription>/resourceGroups/<dns-rg>/providers/Microsoft.Network/privateDnsZones/privatelink.file.core.windows.net",
+          "queue": "/subscriptions/<subscription>/resourceGroups/<dns-rg>/providers/Microsoft.Network/privateDnsZones/privatelink.queue.core.windows.net",
+          "table": "/subscriptions/<subscription>/resourceGroups/<dns-rg>/providers/Microsoft.Network/privateDnsZones/privatelink.table.core.windows.net",
+          "cosmosSql": "/subscriptions/<subscription>/resourceGroups/<dns-rg>/providers/Microsoft.Network/privateDnsZones/privatelink.documents.azure.com",
+          "acr": "/subscriptions/<subscription>/resourceGroups/<dns-rg>/providers/Microsoft.Network/privateDnsZones/privatelink.azurecr.io",
+          "sites": "/subscriptions/<subscription>/resourceGroups/<dns-rg>/providers/Microsoft.Network/privateDnsZones/privatelink.azurewebsites.net",
+          "cognitiveServices": "/subscriptions/<subscription>/resourceGroups/<dns-rg>/providers/Microsoft.Network/privateDnsZones/privatelink.cognitiveservices.azure.com",
+          "openAi": "/subscriptions/<subscription>/resourceGroups/<dns-rg>/providers/Microsoft.Network/privateDnsZones/privatelink.openai.azure.com",
+          "aiServices": "/subscriptions/<subscription>/resourceGroups/<dns-rg>/providers/Microsoft.Network/privateDnsZones/privatelink.services.ai.azure.com",
+          "search": "/subscriptions/<subscription>/resourceGroups/<dns-rg>/providers/Microsoft.Network/privateDnsZones/privatelink.search.windows.net",
+          "monitor": "/subscriptions/<subscription>/resourceGroups/<dns-rg>/providers/Microsoft.Network/privateDnsZones/privatelink.monitor.azure.com",
+          "oms": "/subscriptions/<subscription>/resourceGroups/<dns-rg>/providers/Microsoft.Network/privateDnsZones/privatelink.oms.opinsights.azure.com",
+          "ods": "/subscriptions/<subscription>/resourceGroups/<dns-rg>/providers/Microsoft.Network/privateDnsZones/privatelink.ods.opinsights.azure.com",
+          "agentsvc": "/subscriptions/<subscription>/resourceGroups/<dns-rg>/providers/Microsoft.Network/privateDnsZones/privatelink.agentsvc.azure.automation.net"
+        }
+      }
+    },
+    "existingMonitoring": {
+      "value": {
+        "applicationInsightsConnectionString": "<existing-connection-string>",
+        "logAnalyticsWorkspaceId": "/subscriptions/<subscription>/resourceGroups/<ops-rg>/providers/Microsoft.OperationalInsights/workspaces/<workspace>",
+        "azureMonitorPrivateLinkScopeId": "/subscriptions/<subscription>/resourceGroups/<ops-rg>/providers/Microsoft.Insights/privateLinkScopes/<ampls>"
+      }
+    }
+  }
+}
+

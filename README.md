@@ -71,3 +71,4 @@ az deployment sub what-if \
 
 Deploy infrastructure before packaging and deploying `app/logic`. The Logic Apps zip must contain the contents of `app/logic` at its root.
 
+The included deployment workflow builds a single container containing the Quart API and compiled React application, pushes it with ACR Tasks, and zip-deploys the Logic App project. Private deployments require a self-hosted runner with access to the existing private network and SCM endpoint.

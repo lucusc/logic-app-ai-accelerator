@@ -1,4 +1,5 @@
 param location string
+@minLength(3)
 param resourceToken string
 param tags object
 param networkMode string
@@ -140,7 +141,6 @@ resource registry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   }
   properties: {
     adminUserEnabled: false
-    anonymousPullEnabled: false
     dataEndpointEnabled: false
     publicNetworkAccess: privateMode ? 'Disabled' : 'Enabled'
     networkRuleBypassOptions: 'AzureServices'
@@ -261,4 +261,3 @@ output cosmosEndpoint string = cosmos.properties.documentEndpoint
 output registryId string = registry.id
 output registryName string = registry.name
 output registryLoginServer string = registry.properties.loginServer
-
