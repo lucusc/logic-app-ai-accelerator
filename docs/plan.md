@@ -49,20 +49,22 @@ either a public dev/test setup or an existing PBMM / Azure Landing Zone network.
 - CI workflow for build, lint, and tests, plus a GitHub Actions deployment
   workflow.
 
-### Phase 2 — Parameterization and azd parity
+### Phase 2 — Parameterization and azd parity (complete, not yet deployed)
 
 Restore the customization the original document-review-platform offered, using
 grouped, typed parameters instead of ~115 flat ones.
 
 - **azd integration:**
-  - Add a `main.parameters.json` that maps every input to
-    `${AZURE_*=default}`, so `azd env set` can change it.
+  - Add `infra/main.bicepparam`, which maps every input to an azd
+    environment variable, so `azd env set` can change it. (A `.bicepparam`
+    file was chosen over `main.parameters.json` because it supports typed
+    objects and arrays.)
   - Register the web app and Logic App as azd services.
   - Expose the outputs azd needs.
 - **SKUs (`skus` object):** web App Service plan, Logic App plan, container
   registry, AI Search (including replicas and partitions), AI Services,
   Document Intelligence, Cosmos DB mode and throughput, and storage.
-- **Naming (`names` object):** optional name overrides for each resource.
+- **Naming (`resourceNames` object):** optional name overrides for each resource.
   Default names use the standard abbreviations plus a unique token. Resource
   group names can already be overridden.
 - **Models (`modelDeployments` array):** any number of deployments (for example
@@ -82,12 +84,26 @@ grouped, typed parameters instead of ~115 flat ones.
 - **Must avoid:** the original's flaws — untyped on/off settings that can
   combine into invalid configurations, secrets passed as parameters, misspelled
   names, and stale region allow-lists.
+- **Delivered notes:**
+  - App Service authentication uses a managed-identity federated credential
+    instead of a client secret. The Logic App calls the API with its
+    user-assigned identity, which the web app allows.
+  - The resource token was shortened, which fixes storage account names that
+    could exceed 24 characters.
+  - Output names changed to azd-style `UPPER_SNAKE_CASE`.
+  - The `fail()` validations compile, but have not been run against Azure
+    because the current account can't run deployment validation. Phase 3
+    covers this.
 
 ### Phase 3 — Hardening and first deployment
 
-- Authenticate the API endpoint the Logic App calls (App Service built-in
-  authentication, "Easy Auth", using the Logic App's managed identity).
-- Add user sign-in to the web app.
+- Confirm App Service authentication end to end (the infrastructure and hooks
+  were added in Phase 2): user sign-in, and the Logic App's managed identity
+  calling the API.
+- Confirm the Logic App HTTP action accepts the user-assigned identity from an
+  app setting.
+- Run the deployment validations (`fail()` rules) against Azure for valid and
+  invalid inputs.
 - Foundry Agent Service in private mode: add the input for its delegated agent
   subnet, plus the post-capability-host roles on Cosmos DB and Storage.
 - Confirm the Foundry local-authentication setting and the Logic App trigger

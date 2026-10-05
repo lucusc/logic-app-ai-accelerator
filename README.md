@@ -32,7 +32,7 @@ app/logic/         Logic Apps Standard project
 infra/             Subscription-scoped Bicep and reusable modules
 docs/              Plan and design documentation
 samples/           Foundry agent setup example
-scripts/           Local verification
+scripts/           Verification, parameter checks, and azd hooks
 ```
 
 ## Local development
@@ -58,12 +58,72 @@ npm run dev
 
 ```bash
 ./scripts/verify.sh
-az bicep build --file infra/main.bicep
 ```
 
-## Deploy
+This builds the Bicep template, type-checks `infra/main.bicepparam` and the example parameter files, validates the Logic App project, and runs the hook, API, and frontend tests and lint.
 
-Copy `infra/main.parameters.example.json` to an environment-specific parameter file, provide the required values, and preview the subscription deployment:
+## Parameters
+
+`infra/main.bicep` uses grouped, typed parameters defined in `infra/types.bicep`. Invalid combinations fail at deployment start with a clear message.
+
+| Parameter | Purpose |
+|---|---|
+| `appName`, `environmentName`, `location`, `tags` | Naming inputs, region, and extra tags |
+| `networkMode`, `privateNetwork` | `public` or `private`; private mode takes subnet and private DNS zone resource IDs |
+| `monitoringMode`, `existingMonitoring` | `none`, `new`, or `existing` monitoring |
+| `resourceGroupNames`, `resourceNames` | Optional overrides for any resource group or resource name |
+| `skus` | Web and Logic App plans, ACR, AI Search (replicas, partitions, semantic), AI Services, Document Intelligence, Cosmos DB (serverless or provisioned), storage, log retention |
+| `modelDeployments`, `chatDeploymentName` | Any number of model deployments; which one the app uses for chat |
+| `identity` | Tenant and auth tenant, the developer principal for data roles, and App Service authentication |
+| `hosting` | Optional App Service Environment IDs, CORS origins, and a public-mode IP allow-list |
+| `webContainerImage`, `backendApiAudience` | Web container image and the audience the Logic App requests tokens for |
+
+Notable rules: private mode requires a Premium container registry; an ASE requires an Isolated (`I*v2`) plan; the Logic App plan must be WS1–WS3 otherwise; the IP allow-list applies only to public mode.
+
+## Deploy with azd
+
+`infra/main.bicepparam` maps every parameter to an azd environment variable, so you can change settings with `azd env set` instead of editing files.
+
+```bash
+azd env new dev
+azd env set AZURE_LOCATION canadacentral
+azd env set AZURE_APP_NAME myapp              # optional, default aiaccel
+azd up
+```
+
+Common settings (see `infra/main.bicepparam` for the full list):
+
+| Variable | Default | Notes |
+|---|---|---|
+| `AZURE_NETWORK_MODE` | `public` | `private` also needs `AZURE_PRIVATE_ENDPOINT_SUBNET_ID`, `AZURE_WEB_INTEGRATION_SUBNET_ID`, `AZURE_LOGIC_INTEGRATION_SUBNET_ID`, and DNS zones |
+| `AZURE_PRIVATE_DNS_ZONES_RESOURCE_GROUP_ID` | | Builds standard public-cloud zone IDs from one resource group |
+| `AZURE_PRIVATE_DNS_ZONE_IDS` | `{}` | JSON object that overrides individual zone IDs (needed for sovereign clouds) |
+| `AZURE_MONITORING_MODE` | `new` | `existing` needs `AZURE_EXISTING_APPLICATION_INSIGHTS_CONNECTION_STRING` and `AZURE_EXISTING_LOG_ANALYTICS_WORKSPACE_ID` |
+| `AZURE_WEB_APP_SKU`, `AZURE_LOGIC_APP_SKU` | `P1v3`, `WS1` | Plus `_TIER` and `_CAPACITY` |
+| `AZURE_CONTAINER_REGISTRY_SKU` | `Premium` | `Basic` or `Standard` are allowed in public mode |
+| `AZURE_SEARCH_SKU` | `standard` | Plus `AZURE_SEARCH_REPLICA_COUNT`, `AZURE_SEARCH_PARTITION_COUNT`, `AZURE_SEARCH_SEMANTIC_SEARCH` |
+| `AZURE_COSMOS_MODE` | `serverless` | `provisioned` uses `AZURE_COSMOS_THROUGHPUT` |
+| `AZURE_CHAT_MODEL_NAME`, `AZURE_CHAT_MODEL_VERSION` | `gpt-4.1-mini`, `2025-04-14` | Optional `AZURE_EMBEDDING_MODEL_NAME` adds an embedding deployment |
+| `AZURE_MODEL_DEPLOYMENTS` | | JSON array that replaces the model list |
+| `AZURE_USE_APP_SERVICE_AUTH` | `false` | Turns on Entra sign-in for the web app (see below) |
+| `AZURE_PRINCIPAL_TYPE` | `User` | Set by you; azd sets `AZURE_PRINCIPAL_ID` to the signed-in identity automatically |
+| `AZURE_NAME_*`, `AZURE_RG_*_NAME` | | Resource and resource group name overrides |
+
+azd deploys two services: `web` (container built remotely in ACR) and `logic` (the `app/logic` workflow project, deployed through the Functions host that Logic Apps Standard runs on). In `private` mode, run azd from a machine that can reach the private endpoints and SCM sites.
+
+### App Service authentication
+
+When `AZURE_USE_APP_SERVICE_AUTH=true`:
+
+- The `preprovision` hook creates or updates an Entra app registration (`<app>-<env>-web`) and stores its client ID in `AZURE_APP_SERVICE_AUTH_CLIENT_ID`. To use an existing registration, set that variable first.
+- The `postprovision` hook adds the web redirect URI and a federated credential that trusts the web app's user-assigned managed identity. No client secret is created.
+- The web app requires sign-in, except for `/api/health`. Calls from the Logic App are allowed through its managed identity.
+
+The hooks need Python 3 and permission to manage app registrations in the auth tenant (`AZURE_AUTH_TENANT_ID`, which defaults to the deployment tenant).
+
+## Deploy without azd
+
+Copy `infra/main.parameters.example.json` (public) or `infra/private.parameters.example.json` (private) to an environment-specific file, provide the required values, and preview the subscription deployment:
 
 ```bash
 az deployment sub what-if \
@@ -74,4 +134,4 @@ az deployment sub what-if \
 
 Deploy infrastructure before packaging and deploying `app/logic`. The Logic Apps zip must contain the contents of `app/logic` at its root.
 
-The included deployment workflow builds a single container containing the Quart API and compiled React application, pushes it with ACR Tasks, and zip-deploys the Logic App project. Private deployments require a self-hosted runner with access to the existing private network and SCM endpoint.
+The included GitHub Actions workflow builds a single container containing the Quart API and compiled React application, pushes it with ACR Tasks, and zip-deploys the Logic App project. It does not run the azd hooks, so create the app registration separately if you enable App Service authentication. Private deployments require a self-hosted runner with access to the existing private network and SCM endpoint.
