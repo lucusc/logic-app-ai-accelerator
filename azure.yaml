@@ -1,14 +1,48 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
 name: logic-app-ai-accelerator
 metadata:
   template: logic-app-ai-accelerator@0.1.0
 infra:
   provider: bicep
   path: infra
+  module: main
 services:
-  accelerator:
+  # Service names must match the azd-service-name tags set in infra/modules/application/compute.bicep.
+  web:
     project: .
     host: appservice
     language: docker
+    resourceGroup: ${AZURE_APPLICATION_RESOURCE_GROUP}
     docker:
       path: app/backend/Dockerfile
       context: .
+      remoteBuild: true
+  logic:
+    # Logic Apps Standard runs on the Functions host; azd zips and deploys the workflow project as-is.
+    project: app/logic
+    host: function
+    language: js
+    resourceGroup: ${AZURE_APPLICATION_RESOURCE_GROUP}
+hooks:
+  preprovision:
+    posix:
+      shell: sh
+      run: python3 scripts/hooks/app_registration.py preprovision
+      interactive: true
+      continueOnError: false
+    windows:
+      shell: pwsh
+      run: python scripts/hooks/app_registration.py preprovision
+      interactive: true
+      continueOnError: false
+  postprovision:
+    posix:
+      shell: sh
+      run: python3 scripts/hooks/app_registration.py postprovision
+      interactive: true
+      continueOnError: false
+    windows:
+      shell: pwsh
+      run: python scripts/hooks/app_registration.py postprovision
+      interactive: true
+      continueOnError: false

@@ -47,7 +47,7 @@ jobs:
       - name: Build application image
         shell: bash
         run: |
-          registry_name="$(jq -r '.containerRegistryName.value' deployment-outputs.json)"
+          registry_name="$(jq -r '.AZURE_CONTAINER_REGISTRY_NAME.value' deployment-outputs.json)"
           az acr build \
             --registry "$registry_name" \
             --image accelerator:latest \
@@ -57,21 +57,23 @@ jobs:
       - name: Restart web application
         shell: bash
         run: |
-          resource_group="$(jq -r '.applicationResourceGroupName.value' deployment-outputs.json)"
-          web_app="$(jq -r '.webAppName.value' deployment-outputs.json)"
+          resource_group="$(jq -r '.AZURE_APPLICATION_RESOURCE_GROUP.value' deployment-outputs.json)"
+          web_app="$(jq -r '.WEB_APP_NAME.value' deployment-outputs.json)"
           az webapp restart --resource-group "$resource_group" --name "$web_app"
 
       - name: Package and deploy Logic App workflows
         shell: bash
         run: |
-          resource_group="$(jq -r '.applicationResourceGroupName.value' deployment-outputs.json)"
-          logic_app="$(jq -r '.logicAppName.value' deployment-outputs.json)"
+          resource_group="$(jq -r '.AZURE_APPLICATION_RESOURCE_GROUP.value' deployment-outputs.json)"
+          logic_app="$(jq -r '.LOGIC_APP_NAME.value' deployment-outputs.json)"
           (
             cd app/logic
             zip -qr ../../logic-app.zip . \
               -x 'local.settings.json' \
               -x 'local.settings.example.json' \
-              -x 'README.md'
+              -x 'README.md' \
+              -x 'package.json' \
+              -x 'node_modules/*'
           )
           az logicapp deployment source config-zip \
             --resource-group "$resource_group" \

@@ -32,6 +32,59 @@
         "azureMonitorPrivateLinkScopeId": ""
       }
     },
+    "skus": {
+      "value": {
+        "webAppPlan": {
+          "name": "B1"
+        },
+        "logicAppPlan": {
+          "name": "WS1"
+        },
+        "containerRegistry": "Basic",
+        "search": {
+          "name": "basic"
+        },
+        "documentIntelligence": "S0",
+        "cosmos": {
+          "mode": "serverless"
+        },
+        "storage": "Standard_LRS"
+      }
+    },
+    "modelDeployments": {
+      "value": [
+        {
+          "name": "chat",
+          "model": "gpt-4.1-mini",
+          "version": "2025-04-14",
+          "skuName": "GlobalStandard",
+          "capacity": 10
+        },
+        {
+          "name": "embedding",
+          "model": "text-embedding-3-small",
+          "version": "1",
+          "skuName": "GlobalStandard",
+          "capacity": 10
+        }
+      ]
+    },
+    "chatDeploymentName": {
+      "value": "chat"
+    },
+    "identity": {
+      "value": {
+        "principalId": "",
+        "principalType": "User",
+        "enableAppServiceAuth": false
+      }
+    },
+    "hosting": {
+      "value": {
+        "corsAllowedOrigins": [],
+        "allowedIpRanges": []
+      }
+    },
     "tags": {
       "value": {
         "CostCenter": "replace-me",
@@ -40,4 +93,3 @@
     }
   }
 }
-
