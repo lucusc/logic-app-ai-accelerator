@@ -247,6 +247,11 @@ module foundryPe '../networking/private-endpoint.bicep' = if (privateMode) {
     ]
     tags: tags
   }
+  dependsOn: [
+    foundry
+    project
+    modelDeploymentResources
+  ]
 }
 
 module documentIntelligencePe '../networking/private-endpoint.bicep' = if (privateMode) {
@@ -264,6 +269,9 @@ module documentIntelligencePe '../networking/private-endpoint.bicep' = if (priva
     ]
     tags: tags
   }
+  dependsOn: [
+    documentIntelligence
+  ]
 }
 
 module searchPe '../networking/private-endpoint.bicep' = if (privateMode) {
@@ -281,6 +289,9 @@ module searchPe '../networking/private-endpoint.bicep' = if (privateMode) {
     ]
     tags: tags
   }
+  dependsOn: [
+    search
+  ]
 }
 
 resource foundryDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (diagnosticsEnabled && foundryIsNew) {
