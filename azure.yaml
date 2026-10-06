@@ -46,3 +46,14 @@ hooks:
       run: python scripts/hooks/app_registration.py postprovision
       interactive: true
       continueOnError: false
+  predown:
+    posix:
+      shell: sh
+      run: python3 scripts/hooks/teardown_monitoring.py
+      interactive: true
+      continueOnError: false
+    windows:
+      shell: pwsh
+      run: python scripts/hooks/teardown_monitoring.py
+      interactive: true
+      continueOnError: false

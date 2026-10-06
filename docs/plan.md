@@ -190,10 +190,11 @@ subnet (`Microsoft.App/environments`); web and Logic App integration subnets
 (`Microsoft.Web/serverFarms`); the private DNS zones; and a runner inside the
 network for `azd deploy`. `scripts/test-network/` builds a test VNet like this.
 
-**Teardown quirks:** delete the Azure Monitor private link scope before purging
-the Log Analytics workspace; a Foundry account must reach a terminal state
-before its resource group deletes; purge soft-deleted Cognitive Services
-accounts.
+**Teardown:** the `predown` hook deletes the project-managed Azure Monitor
+private link scope before `azd down` removes its linked Log Analytics
+workspace. This makes `azd down --purge` a full teardown for private
+environments. A Foundry account must still reach a terminal state before its
+resource group deletes; purge soft-deleted Cognitive Services accounts.
 
 ### Phase 4 — Reuse of existing resources (implemented; validated, not deployed)
 

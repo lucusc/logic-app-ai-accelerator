@@ -1,0 +1,75 @@
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "hooks"))
+
+import teardown_monitoring as hook  # noqa: E402
+
+BASE_ENV = {
+    "AZURE_ENV_NAME": "private",
+    "AZURE_SUBSCRIPTION_ID": "sub-1",
+    "AZURE_OPERATIONS_RESOURCE_GROUP": "rg-ops",
+    "AZURE_MONITOR_PRIVATE_LINK_SCOPE_NAME": "ampls-private",
+}
+
+
+def completed(returncode=0, stdout="", stderr=""):
+    return subprocess.CompletedProcess(args=[], returncode=returncode, stdout=stdout, stderr=stderr)
+
+
+def test_main_skips_when_monitoring_is_not_application_owned(capsys):
+    assert hook.main(env={}, run=pytest.fail) == 0
+    assert "skipping" in capsys.readouterr().out
+
+
+def test_delete_scope_uses_configured_name_and_waits_for_operation():
+    calls = []
+
+    def send(method, url, token):
+        calls.append((method, url, token))
+        if method == "DELETE":
+            return 202, {"Azure-AsyncOperation": "https://operation"}, b""
+        return 200, {"Retry-After": "0"}, b'{"status":"Succeeded"}'
+
+    assert hook.delete_scope(BASE_ENV, "token", send, sleep=lambda _: None)
+    assert calls == [
+        ("DELETE", hook.scope_url("sub-1", "rg-ops", "ampls-private"), "token"),
+        ("GET", "https://operation", "token"),
+    ]
+
+
+def test_delete_scope_finds_scope_for_preexisting_environment():
+    collection = hook.management_url(
+        "/subscriptions/sub-1/resourceGroups/rg-ops/providers/Microsoft.Insights/privateLinkScopes"
+    )
+    calls = []
+
+    def send(method, url, token):
+        calls.append((method, url))
+        if url == collection:
+            return 200, {}, json.dumps({"value": [{
+                "name": "ampls-discovered",
+                "tags": {"azd-env-name": "private", "Repository": "logic-app-ai-accelerator"},
+            }]}).encode()
+        return 204, {}, b""
+
+    assert hook.delete_scope({key: value for key, value in BASE_ENV.items()
+                              if key != "AZURE_MONITOR_PRIVATE_LINK_SCOPE_NAME"}, "token", send)
+    assert calls == [
+        ("GET", collection),
+        ("DELETE", hook.scope_url("sub-1", "rg-ops", "ampls-discovered")),
+    ]
+
+
+def test_delete_scope_skips_missing_scope(capsys):
+    assert not hook.delete_scope(BASE_ENV, "token", lambda *_: (404, {}, b""))
+    assert "already deleted" in capsys.readouterr().out
+
+
+def test_main_surfaces_token_failure(capsys):
+    assert hook.main(env=BASE_ENV, run=lambda *_args, **_kwargs: completed(returncode=1, stderr="not signed in")) == 1
+    assert "not signed in" in capsys.readouterr().err

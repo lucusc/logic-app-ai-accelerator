@@ -711,6 +711,7 @@ output AZURE_RESOURCE_GROUP string = applicationResourceGroup.name
 output AZURE_APPLICATION_RESOURCE_GROUP string = applicationResourceGroup.name
 output AZURE_AI_RESOURCE_GROUP string = aiResourceGroup.name
 output AZURE_OPERATIONS_RESOURCE_GROUP string = monitoringMode == 'new' ? operationsResourceGroup.name : ''
+output AZURE_MONITOR_PRIVATE_LINK_SCOPE_NAME string = monitoringMode == 'new' && privateMode ? names.monitorPrivateLinkScope : ''
 output AZURE_CONTAINER_REGISTRY_NAME string = data.outputs.registryName
 output AZURE_CONTAINER_REGISTRY_ENDPOINT string = data.outputs.registryLoginServer
 output AZURE_STORAGE_ENDPOINT string = data.outputs.storageBlobEndpoint
