@@ -11,6 +11,8 @@ param cosmosSku object = {
   mode: 'serverless'
 }
 param containerRegistrySku string = 'Premium'
+param diagnosticsEnabled bool = false
+param logAnalyticsWorkspaceId string = ''
 
 var privateMode = networkMode == 'private'
 var cosmosServerless = cosmosSku.mode == 'serverless'
@@ -170,6 +172,66 @@ resource registry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
         type: 'Notary'
       }
     }
+  }
+}
+
+resource storageBlobDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (diagnosticsEnabled) {
+  name: 'default'
+  scope: blobService
+  properties: {
+    logs: [
+      {
+        categoryGroup: 'allLogs'
+        enabled: true
+      }
+    ]
+    metrics: [
+      {
+        category: 'Transaction'
+        enabled: true
+      }
+    ]
+    workspaceId: logAnalyticsWorkspaceId
+  }
+}
+
+resource cosmosDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (diagnosticsEnabled) {
+  name: 'default'
+  scope: cosmos
+  properties: {
+    logs: [
+      {
+        categoryGroup: 'allLogs'
+        enabled: true
+      }
+    ]
+    metrics: [
+      {
+        category: 'Requests'
+        enabled: true
+      }
+    ]
+    workspaceId: logAnalyticsWorkspaceId
+  }
+}
+
+resource registryDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (diagnosticsEnabled) {
+  name: 'default'
+  scope: registry
+  properties: {
+    logs: [
+      {
+        categoryGroup: 'allLogs'
+        enabled: true
+      }
+    ]
+    metrics: [
+      {
+        category: 'AllMetrics'
+        enabled: true
+      }
+    ]
+    workspaceId: logAnalyticsWorkspaceId
   }
 }
 

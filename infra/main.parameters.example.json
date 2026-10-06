@@ -32,6 +32,19 @@
         "azureMonitorPrivateLinkScopeId": ""
       }
     },
+    "aiResources": {
+      "value": {
+        "foundry": {
+          "mode": "new"
+        },
+        "documentIntelligence": {
+          "mode": "new"
+        },
+        "search": {
+          "mode": "new"
+        }
+      }
+    },
     "skus": {
       "value": {
         "webAppPlan": {

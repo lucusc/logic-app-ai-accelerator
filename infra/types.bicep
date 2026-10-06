@@ -42,8 +42,27 @@ type privateNetworkType = {
 type existingMonitoringType = {
   applicationInsightsConnectionString: string?
   logAnalyticsWorkspaceId: string?
-  @description('Accepted for documentation. The AMPLS owner manages scoped resources.')
+  @description('Informational only. The accelerator does not modify an existing AMPLS; its owner must add the workspace and Application Insights as scoped resources and provide private endpoint DNS.')
   azureMonitorPrivateLinkScopeId: string?
+}
+
+@export()
+type aiResourceModeType = 'new' | 'existing'
+
+@export()
+@description('Reuse or create one AI service. resourceId is required when mode is existing and may be in another subscription or resource group.')
+type aiResourceType = {
+  mode: aiResourceModeType?
+  resourceId: string?
+}
+
+@export()
+@description('Per-service AI resource mode. Each service defaults to new.')
+type aiResourcesType = {
+  @description('Foundry (AIServices) account. An existing account gets no project, connections, or capability host from the accelerator.')
+  foundry: aiResourceType?
+  documentIntelligence: aiResourceType?
+  search: aiResourceType?
 }
 
 @export()

@@ -1,6 +1,7 @@
 targetScope = 'subscription'
 
 import {
+  aiResourcesType
   existingMonitoringType
   hostingType
   identityType
@@ -43,6 +44,9 @@ param privateNetwork privateNetworkType = {}
 @description('Existing monitoring values. Required only when monitoringMode is existing.')
 param existingMonitoring existingMonitoringType = {}
 
+@description('Reuse existing Foundry, Document Intelligence, or AI Search resources. Each service defaults to new.')
+param aiResources aiResourcesType = {}
+
 @description('Optional resource group name overrides.')
 param resourceGroupNames resourceGroupNamesType = {}
 
@@ -82,6 +86,28 @@ param webContainerImage string = ''
 param tags object = {}
 
 func valueOrDefault(value string?, fallback string) string => empty(value ?? '') ? fallback : value!
+
+func aiTarget(label string, mode string?, resourceId string?, resourceType string, newName string, newResourceGroup string, currentSubscriptionId string) object =>
+  (mode ?? 'new') == 'new'
+    ? empty(resourceId ?? '')
+        ? {
+            isNew: true
+            subscriptionId: currentSubscriptionId
+            resourceGroup: newResourceGroup
+            name: newName
+          }
+        : fail('aiResources.${label}.resourceId is only valid when aiResources.${label}.mode is existing.')
+    : map(
+        [split(resourceId ?? '', '/')],
+        parts => length(parts) == 9 && toLower(parts[1]) == 'subscriptions' && toLower(parts[3]) == 'resourcegroups' && toLower(parts[5]) == 'providers' && toLower('${parts[6]}/${parts[7]}') == toLower(resourceType)
+          ? {
+              isNew: false
+              subscriptionId: parts[2]
+              resourceGroup: parts[4]
+              name: parts[8]
+            }
+          : fail('aiResources.${label}.resourceId is required when mode is existing and must be a ${resourceType} resource ID.')
+      )[0]
 
 var privateMode = networkMode == 'private'
 
@@ -166,6 +192,84 @@ var resolvedSkus = {
   storage: skus.?storage ?? 'Standard_LRS'
   logAnalyticsRetentionInDays: skus.?logAnalyticsRetentionInDays ?? 30
 }
+
+// AI resource placement. New resources live in the AI resource group; existing ones keep their own subscription and resource group.
+var aiTargets = {
+  foundry: aiTarget('foundry', aiResources.?foundry.?mode, aiResources.?foundry.?resourceId, 'Microsoft.CognitiveServices/accounts', names.foundryAccount, aiResourceGroupName, subscription().subscriptionId)
+  documentIntelligence: aiTarget('documentIntelligence', aiResources.?documentIntelligence.?mode, aiResources.?documentIntelligence.?resourceId, 'Microsoft.CognitiveServices/accounts', names.documentIntelligence, aiResourceGroupName, subscription().subscriptionId)
+  search: aiTarget('search', aiResources.?search.?mode, aiResources.?search.?resourceId, 'Microsoft.Search/searchServices', names.search, aiResourceGroupName, subscription().subscriptionId)
+}
+var foundryIsNew = aiTargets.foundry.isNew
+var newAiServices = {
+  foundry: aiTargets.foundry.isNew
+  documentIntelligence: aiTargets.documentIntelligence.isNew
+  search: aiTargets.search.isNew
+}
+
+// Grants: services lists the AI resources the role applies to. Roles for new resources are
+// assigned on the AI resource group; roles for existing resources on the resource itself.
+var webAiGrants = [
+  {
+    id: '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd'
+    name: 'openai-user'
+    services: ['foundry']
+  }
+  {
+    id: 'a97b65f3-24c7-4388-baec-2e87135dc908'
+    name: 'cognitive-services-user'
+    services: ['foundry', 'documentIntelligence']
+  }
+  {
+    id: '8ebe5a00-799e-43f5-93ac-243d3dce84a7'
+    name: 'search-index-contributor'
+    services: ['search']
+  }
+]
+var developerAiGrants = [
+  {
+    id: '53ca6127-db72-4b80-b1b0-d745d6d5456d'
+    name: 'azure-ai-user'
+    services: ['foundry']
+  }
+  {
+    id: '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd'
+    name: 'openai-user'
+    services: ['foundry']
+  }
+  {
+    id: 'a97b65f3-24c7-4388-baec-2e87135dc908'
+    name: 'cognitive-services-user'
+    services: ['foundry', 'documentIntelligence']
+  }
+  {
+    id: '8ebe5a00-799e-43f5-93ac-243d3dce84a7'
+    name: 'search-index-contributor'
+    services: ['search']
+  }
+  {
+    id: '7ca78c08-252a-4471-8644-bb5ff32d4ba0'
+    name: 'search-service-contributor'
+    services: ['search']
+  }
+]
+var foundryProjectAiGrants = [
+  {
+    id: '8ebe5a00-799e-43f5-93ac-243d3dce84a7'
+    name: 'search-index-contributor'
+    services: ['search']
+  }
+  {
+    id: '7ca78c08-252a-4471-8644-bb5ff32d4ba0'
+    name: 'search-service-contributor'
+    services: ['search']
+  }
+]
+var webAiGrantsNew = filter(webAiGrants, grant => !empty(filter(grant.services, service => newAiServices[service])))
+var developerAiGrantsNew = filter(developerAiGrants, grant => !empty(filter(grant.services, service => newAiServices[service])))
+var foundryProjectAiGrantsNew = filter(foundryProjectAiGrants, grant => !empty(filter(grant.services, service => newAiServices[service])))
+var webAiGrantsExisting = flatten(map(webAiGrants, grant => map(filter(grant.services, service => !newAiServices[service]), service => union(grant, { service: service }))))
+var developerAiGrantsExisting = flatten(map(developerAiGrants, grant => map(filter(grant.services, service => !newAiServices[service]), service => union(grant, { service: service }))))
+var foundryProjectAiGrantsExisting = flatten(map(foundryProjectAiGrants, grant => map(filter(grant.services, service => !newAiServices[service]), service => union(grant, { service: service }))))
 
 // Models
 var modelDeploymentNames = map(modelDeployments, deployment => deployment.name)
@@ -286,6 +390,8 @@ module data './modules/application/data.bicep' = {
     containerRegistrySku: resolvedSkus.containerRegistry
     privateEndpointSubnetId: privateEndpointSubnetId
     privateDnsZoneIds: privateDnsZoneIds
+    diagnosticsEnabled: monitoringMode != 'none'
+    logAnalyticsWorkspaceId: logAnalyticsWorkspaceId
   }
 }
 
@@ -311,6 +417,9 @@ module ai './modules/ai/stack.bicep' = {
     tags: commonTags
     networkMode: networkMode
     names: names
+    aiTargets: aiTargets
+    diagnosticsEnabled: monitoringMode != 'none'
+    logAnalyticsWorkspaceId: logAnalyticsWorkspaceId
     aiServicesSku: resolvedSkus.aiServices
     documentIntelligenceSku: resolvedSkus.documentIntelligence
     searchSku: resolvedSkus.search
@@ -396,26 +505,26 @@ module webAppRoles './modules/shared/role-assignment.bicep' = [
 ]
 
 module webAiRoles './modules/shared/role-assignment.bicep' = [
-  for role in [
-    {
-      id: '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd'
-      name: 'openai-user'
-    }
-    {
-      id: 'a97b65f3-24c7-4388-baec-2e87135dc908'
-      name: 'cognitive-services-user'
-    }
-    {
-      id: '8ebe5a00-799e-43f5-93ac-243d3dce84a7'
-      name: 'search-index-contributor'
-    }
-  ]: {
+  for role in webAiGrantsNew: {
     name: 'web-${role.name}'
     scope: aiResourceGroup
     params: {
       principalId: compute.outputs.webPrincipalId
       roleDefinitionId: role.id
       seed: role.name
+    }
+  }
+]
+
+module webExistingAiRoles './modules/shared/ai-resource-role-assignment.bicep' = [
+  for role in webAiGrantsExisting: {
+    name: 'web-${role.service}-${role.name}'
+    scope: resourceGroup(aiTargets[role.service].subscriptionId, aiTargets[role.service].resourceGroup)
+    params: {
+      kind: role.service == 'search' ? 'search' : 'cognitive'
+      resourceName: aiTargets[role.service].name
+      principalId: compute.outputs.webPrincipalId
+      roleDefinitionId: role.id
     }
   }
 ]
@@ -459,7 +568,7 @@ module foundryProjectAppRoles './modules/shared/role-assignment.bicep' = [
       id: '230815da-be43-4aae-9cb4-875f7bd000aa'
       name: 'cosmos-operator'
     }
-  ]: {
+  ]: if (foundryIsNew) {
     name: 'foundry-project-${role.name}'
     scope: applicationResourceGroup
     params: {
@@ -471,16 +580,7 @@ module foundryProjectAppRoles './modules/shared/role-assignment.bicep' = [
 ]
 
 module foundryProjectAiRoles './modules/shared/role-assignment.bicep' = [
-  for role in [
-    {
-      id: '8ebe5a00-799e-43f5-93ac-243d3dce84a7'
-      name: 'search-index-contributor'
-    }
-    {
-      id: '7ca78c08-252a-4471-8644-bb5ff32d4ba0'
-      name: 'search-service-contributor'
-    }
-  ]: {
+  for role in foundryProjectAiGrantsNew: if (foundryIsNew) {
     name: 'foundry-project-${role.name}'
     scope: aiResourceGroup
     params: {
@@ -491,7 +591,20 @@ module foundryProjectAiRoles './modules/shared/role-assignment.bicep' = [
   }
 ]
 
-module projectCapabilityHost './modules/ai/project-capability-host.bicep' = {
+module foundryProjectExistingAiRoles './modules/shared/ai-resource-role-assignment.bicep' = [
+  for role in foundryProjectAiGrantsExisting: if (foundryIsNew) {
+    name: 'foundry-project-${role.service}-${role.name}'
+    scope: resourceGroup(aiTargets[role.service].subscriptionId, aiTargets[role.service].resourceGroup)
+    params: {
+      kind: 'search'
+      resourceName: aiTargets[role.service].name
+      principalId: ai.outputs.foundryProjectPrincipalId
+      roleDefinitionId: role.id
+    }
+  }
+]
+
+module projectCapabilityHost './modules/ai/project-capability-host.bicep' = if (foundryIsNew) {
   name: 'foundry-project-capability-host'
   scope: aiResourceGroup
   params: {
@@ -504,10 +617,11 @@ module projectCapabilityHost './modules/ai/project-capability-host.bicep' = {
   dependsOn: [
     foundryProjectAppRoles
     foundryProjectAiRoles
+    foundryProjectExistingAiRoles
   ]
 }
 
-module foundryProjectPostRoles './modules/ai/project-post-capability-host-roles.bicep' = {
+module foundryProjectPostRoles './modules/ai/project-post-capability-host-roles.bicep' = if (foundryIsNew) {
   name: 'foundry-project-post-capability-host-roles'
   scope: applicationResourceGroup
   params: {
@@ -554,28 +668,7 @@ module developerAppRoles './modules/shared/role-assignment.bicep' = [
 ]
 
 module developerAiRoles './modules/shared/role-assignment.bicep' = [
-  for role in [
-    {
-      id: '53ca6127-db72-4b80-b1b0-d745d6d5456d'
-      name: 'azure-ai-user'
-    }
-    {
-      id: '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd'
-      name: 'openai-user'
-    }
-    {
-      id: 'a97b65f3-24c7-4388-baec-2e87135dc908'
-      name: 'cognitive-services-user'
-    }
-    {
-      id: '8ebe5a00-799e-43f5-93ac-243d3dce84a7'
-      name: 'search-index-contributor'
-    }
-    {
-      id: '7ca78c08-252a-4471-8644-bb5ff32d4ba0'
-      name: 'search-service-contributor'
-    }
-  ]: if (!empty(principalId)) {
+  for role in developerAiGrantsNew: if (!empty(principalId)) {
     name: 'developer-${role.name}'
     scope: aiResourceGroup
     params: {
@@ -583,6 +676,20 @@ module developerAiRoles './modules/shared/role-assignment.bicep' = [
       principalType: principalType
       roleDefinitionId: role.id
       seed: 'developer-${role.name}'
+    }
+  }
+]
+
+module developerExistingAiRoles './modules/shared/ai-resource-role-assignment.bicep' = [
+  for role in developerAiGrantsExisting: if (!empty(principalId)) {
+    name: 'developer-${role.service}-${role.name}'
+    scope: resourceGroup(aiTargets[role.service].subscriptionId, aiTargets[role.service].resourceGroup)
+    params: {
+      kind: role.service == 'search' ? 'search' : 'cognitive'
+      resourceName: aiTargets[role.service].name
+      principalId: principalId
+      principalType: principalType
+      roleDefinitionId: role.id
     }
   }
 ]

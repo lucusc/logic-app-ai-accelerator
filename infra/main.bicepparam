@@ -51,6 +51,22 @@ param existingMonitoring = {
   azureMonitorPrivateLinkScopeId: readEnvironmentVariable('AZURE_EXISTING_MONITOR_PRIVATE_LINK_SCOPE_ID', '')
 }
 
+// Reuse existing AI resources. Set a mode to 'existing' and supply the full resource ID.
+param aiResources = {
+  foundry: {
+    mode: any(readEnvironmentVariable('AZURE_FOUNDRY_MODE', 'new'))
+    resourceId: readEnvironmentVariable('AZURE_EXISTING_FOUNDRY_RESOURCE_ID', '')
+  }
+  documentIntelligence: {
+    mode: any(readEnvironmentVariable('AZURE_DOCUMENT_INTELLIGENCE_MODE', 'new'))
+    resourceId: readEnvironmentVariable('AZURE_EXISTING_DOCUMENT_INTELLIGENCE_RESOURCE_ID', '')
+  }
+  search: {
+    mode: any(readEnvironmentVariable('AZURE_SEARCH_MODE', 'new'))
+    resourceId: readEnvironmentVariable('AZURE_EXISTING_SEARCH_RESOURCE_ID', '')
+  }
+}
+
 param resourceGroupNames = {
   application: readEnvironmentVariable('AZURE_RG_APPLICATION_NAME', '')
   ai: readEnvironmentVariable('AZURE_RG_AI_NAME', '')

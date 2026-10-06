@@ -48,6 +48,19 @@
         "azureMonitorPrivateLinkScopeId": "/subscriptions/<subscription>/resourceGroups/<ops-rg>/providers/Microsoft.Insights/privateLinkScopes/<ampls>"
       }
     },
+    "aiResources": {
+      "value": {
+        "foundry": {
+          "mode": "new"
+        },
+        "documentIntelligence": {
+          "mode": "new"
+        },
+        "search": {
+          "mode": "new"
+        }
+      }
+    },
     "skus": {
       "value": {
         "webAppPlan": {

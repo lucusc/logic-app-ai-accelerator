@@ -195,7 +195,7 @@ the Log Analytics workspace; a Foundry account must reach a terminal state
 before its resource group deletes; purge soft-deleted Cognitive Services
 accounts.
 
-### Phase 4 — Reuse of existing resources
+### Phase 4 — Reuse of existing resources (implemented; validated, not deployed)
 
 Goal: let a solution plug in AI and monitoring resources that already exist.
 
@@ -226,6 +226,8 @@ Goal: let a solution plug in AI and monitoring resources that already exist.
   `monitoringMode != 'none'`.
 - Update `main.bicepparam`, the example parameter files, the README, and
   `check_parameter_files.py` for every new input.
+
+**Phase 4 results:** `aiResources` (`foundry`, `documentIntelligence`, `search`; `mode` and `resourceId`) is implemented, with `AZURE_*_MODE` / `AZURE_EXISTING_*_RESOURCE_ID` azd variables. Existing resources are parsed from the ID (type and segment count checked), roles are granted on the resource through `modules/shared/ai-resource-role-assignment.bicep` scoped to its own resource group, and private endpoints are still created. An existing Foundry account gets no project, connections, or capability host. K8 is resolved by documenting that the AMPLS owner does the work; K9 adds diagnostics for the Logic App, storage blob service, Cosmos DB, ACR, and new Foundry, Document Intelligence, and Search. `az deployment sub validate` succeeds for new and all-existing in both network modes and rejects missing or wrong-type IDs. A real `what-if`/deployment against existing resources and the diagnostic categories remain unverified.
 
 **Done when:** `what-if` succeeds for new and existing AI resources in both
 network modes, and one deployment with an existing AI Search (or Document
@@ -383,8 +385,8 @@ future enhancement.
 | K5 | `disableLocalAuth: true` on Foundry, Document Intelligence, and Search. Confirm that the agent capability host and samples work this way. | `infra/modules/ai/stack.bicep` | 3 |
 | K6 | **Fixed.** Was: CI did not run `check_parameter_files.py`, the `scripts/` ruff check, or the `scripts/tests` pytest run, which `verify.sh` does. | `.github/workflows/ci.yml` | 3 |
 | K7 | **Implemented, not deployed:** agent subnet, `networkInjections`, and post-capability-host roles. Passes `what-if`; never provisioned (see Phase 3 results). | `infra/modules/ai/stack.bicep`, `infra/types.bicep` | 3 |
-| K8 | `existingMonitoring.azureMonitorPrivateLinkScopeId` is accepted but unused. | `infra/main.bicep`, `infra/modules/monitoring/stack.bicep` | 4 |
-| K9 | Only the web app has diagnostic settings. | All modules | 4 |
+| K8 | **Resolved:** `existingMonitoring.azureMonitorPrivateLinkScopeId` is informational; the AMPLS owner manages scoped resources and DNS (see README). | `infra/main.bicep`, `infra/modules/monitoring/stack.bicep` | 4 |
+| K9 | **Implemented, not deployed:** diagnostic settings for web, Logic App, storage blob, Cosmos DB, ACR, and new AI resources. | All modules | 4 |
 | K10 | Public-cloud names are hard-coded: private DNS zone names in `main.bicepparam` (override with `AZURE_PRIVATE_DNS_ZONE_IDS`) and the `foundryOpenAiEndpoint` output (`openai.azure.com`). | `infra/main.bicepparam`, `infra/modules/ai/stack.bicep` | 5 |
 | K11 | **Unconfirmed assumptions:** a Logic App on an ASE uses a Windows plan with an `I*v2` SKU; apps on an ASE get no private endpoint; Document Intelligence F0 supports private endpoints; App Service plan `tier` can be omitted. | `infra/modules/application/compute.bicep`, `infra/main.bicep` | 3–5 |
 | K12 | The web IP allow-list adds the Logic App's current outbound IPs (not all possible outbound IPs). The SCM site is intentionally unrestricted so CI can deploy. | `infra/modules/application/compute.bicep` | 5 |

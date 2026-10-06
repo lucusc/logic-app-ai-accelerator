@@ -373,6 +373,29 @@ resource webDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-previe
   }
 }
 
+resource logicDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (monitoringMode != 'none') {
+  name: 'default'
+  scope: logicSite
+  properties: {
+    logs: [
+      {
+        categoryGroup: 'allLogs'
+        enabled: true
+      }
+    ]
+    metrics: [
+      {
+        category: 'AllMetrics'
+        enabled: true
+      }
+    ]
+    workspaceId: logAnalyticsWorkspaceId
+  }
+  dependsOn: [
+    logic
+  ]
+}
+
 module webPe '../networking/private-endpoint.bicep' = if (webPrivateEndpointEnabled) {
   name: 'web-private-endpoint'
   params: {

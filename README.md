@@ -71,6 +71,7 @@ This builds the Bicep template, type-checks `infra/main.bicepparam` and the exam
 | `appName`, `environmentName`, `location`, `tags` | Naming inputs, region, and extra tags |
 | `networkMode`, `privateNetwork` | `public` or `private`; private mode takes subnet and private DNS zone resource IDs |
 | `monitoringMode`, `existingMonitoring` | `none`, `new`, or `existing` monitoring |
+| `aiResources` | Per service (`foundry`, `documentIntelligence`, `search`): `mode` `new` (default) or `existing` with a `resourceId` |
 | `resourceGroupNames`, `resourceNames` | Optional overrides for any resource group or resource name |
 | `skus` | Web and Logic App plans, ACR, AI Search (replicas, partitions, semantic), AI Services, Document Intelligence, Cosmos DB (serverless or provisioned), storage, log retention |
 | `modelDeployments`, `chatDeploymentName` | Any number of model deployments; which one the app uses for chat |
@@ -99,6 +100,7 @@ Common settings (see `infra/main.bicepparam` for the full list):
 | `AZURE_PRIVATE_DNS_ZONES_RESOURCE_GROUP_ID` | | Builds standard public-cloud zone IDs from one resource group |
 | `AZURE_PRIVATE_DNS_ZONE_IDS` | `{}` | JSON object that overrides individual zone IDs (needed for sovereign clouds) |
 | `AZURE_MONITORING_MODE` | `new` | `existing` needs `AZURE_EXISTING_APPLICATION_INSIGHTS_CONNECTION_STRING` and `AZURE_EXISTING_LOG_ANALYTICS_WORKSPACE_ID` |
+| `AZURE_FOUNDRY_MODE`, `AZURE_DOCUMENT_INTELLIGENCE_MODE`, `AZURE_SEARCH_MODE` | `new` | `existing` needs `AZURE_EXISTING_FOUNDRY_RESOURCE_ID`, `AZURE_EXISTING_DOCUMENT_INTELLIGENCE_RESOURCE_ID`, or `AZURE_EXISTING_SEARCH_RESOURCE_ID` (see below) |
 | `AZURE_WEB_APP_SKU`, `AZURE_LOGIC_APP_SKU` | `P1v3`, `WS1` | Plus `_TIER` and `_CAPACITY` |
 | `AZURE_CONTAINER_REGISTRY_SKU` | `Premium` | `Basic` or `Standard` are allowed in public mode |
 | `AZURE_SEARCH_SKU` | `standard` | Plus `AZURE_SEARCH_REPLICA_COUNT`, `AZURE_SEARCH_PARTITION_COUNT`, `AZURE_SEARCH_SEMANTIC_SEARCH` |
@@ -112,6 +114,22 @@ Common settings (see `infra/main.bicepparam` for the full list):
 If your subscription forces storage `publicNetworkAccess` to `Disabled`, the Logic App can't reach its host storage in `public` mode; use `private` mode. `scripts/test-network/deploy.sh <env> <location>` builds a throwaway VNet and DNS zones for trying it.
 
 azd deploys two services: `web` (container built remotely in ACR) and `logic` (the `app/logic` workflow project, deployed through the Functions host that Logic Apps Standard runs on). In `private` mode, run azd from a machine that can reach the private endpoints and SCM sites.
+
+### Reusing existing AI and monitoring resources
+
+Each AI service can be reused by ID, in another resource group or subscription. For `existing` resources the accelerator:
+
+- does not create or change the resource, its networking, or its authentication settings;
+- grants the web identity, the Foundry project identity (Search only), and the developer principal their data roles **on the resource itself**, so the deployment identity needs permission to create role assignments there;
+- creates the private endpoint in the application's private endpoint subnet in `private` mode. Public network access on the existing resource is not changed; turn it off yourself if required;
+- sends no diagnostics for it (the owner manages those).
+
+Requirements and limits:
+
+- The existing resource must allow Entra ID (data-plane RBAC) authentication; Search must have RBAC enabled.
+- With an existing Foundry account, models are not deployed: `modelDeployments` must list the deployments that already exist, and `chatDeploymentName` must be one of them. No project, connections, or capability host are created, so `AZURE_FOUNDRY_PROJECT_*` outputs are empty and `samples/create_agent.py` needs your own project. Reusing an existing Foundry project is not supported yet.
+
+`existingMonitoring.azureMonitorPrivateLinkScopeId` is informational. The accelerator does not modify an existing Azure Monitor Private Link Scope: its owner must add the workspace and Application Insights as scoped resources and provide the private endpoint and DNS. Diagnostic settings (Logic App, web app, storage blob, Cosmos DB, container registry, and any new Foundry, Document Intelligence, and Search) go to the selected workspace whenever `monitoringMode` is not `none`.
 
 ### App Service authentication
 
