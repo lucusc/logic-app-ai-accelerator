@@ -157,10 +157,15 @@ resource logicSite 'Microsoft.Web/sites@2024-04-01' existing = {
   name: names.logicApp
 }
 
+// Separate from logicSite so the property read is skipped (not evaluated at deployment start) without an allow-list.
+resource logicSiteOutbound 'Microsoft.Web/sites@2024-04-01' existing = if (!empty(allowedIpRanges)) {
+  name: names.logicApp
+}
+
 // When an IP allow-list is set, the Logic App must still reach the API.
 var logicOutboundIpRules = empty(allowedIpRanges)
   ? []
-  : map(split(logicSite.properties.possibleOutboundIpAddresses, ','), ip => {
+  : map(split(logicSiteOutbound!.properties.possibleOutboundIpAddresses, ','), ip => {
       name: 'logic-app-outbound'
       ipAddress: '${trim(ip)}/32'
       action: 'Allow'
