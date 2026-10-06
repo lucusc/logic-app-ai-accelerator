@@ -141,6 +141,11 @@ When `AZURE_USE_APP_SERVICE_AUTH=true`:
 
 The hooks need Python 3 and permission to manage app registrations in the auth tenant (`AZURE_AUTH_TENANT_ID`, which defaults to the deployment tenant).
 
+### Teardown and soft-delete
+
+- In private mode the `predown` hook deletes the Azure Monitor Private Link Scope and its private endpoints, so the workspace can be removed. The `preprovision` hook also deletes any AMPLS private endpoint left `Disconnected`, which Azure cannot update.
+- Foundry and Document Intelligence accounts are soft-deleted by default, so redeploying the same environment name fails with `FlagMustBeSetForRestore`. For repeated test cycles, run `azd env set AZURE_PURGE_SOFT_DELETED_ON_DOWN true`. The `postdown` hook then purges the accounts that `down` removed. It does nothing unless set, so real environments keep soft-delete recovery.
+
 ## Deploy without azd
 
 Copy `infra/main.parameters.example.json` (public) or `infra/private.parameters.example.json` (private) to an environment-specific file, provide the required values, and preview the subscription deployment:
