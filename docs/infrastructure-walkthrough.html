@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Infrastructure architecture &amp; deployment — Logic App AI Accelerator</title>
+<script>
+  (() => {
+    const param = new URLSearchParams(window.location.search).get("scoutTheme");
+    const theme =
+      param || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
+</script>
+<style>
+:root {
+  color-scheme: light;
+  --cp-bg: #f7f4ef;
+  --cp-bg-elevated: #fcfbf8;
+  --cp-surface: #ffffff;
+  --cp-surface-soft: #f5f5f5;
+  --cp-border: #dedede;
+  --cp-border-strong: #919191;
+  --cp-text: #242424;
+  --cp-text-muted: #5c5c5c;
+  --cp-text-soft: #6f6f6f;
+  --cp-accent: #b11f4b;
+  --cp-accent-hover: #9a1a41;
+  --cp-accent-soft: rgba(177, 31, 75, 0.08);
+  --cp-accent-fg: #ffffff;
+  --cp-success: #16a34a;
+  --cp-danger: #dc2626;
+  --cp-warning: #f59e0b;
+  --cp-link: #0078d4;
+  --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.12);
+  --cp-overlay: rgba(255, 255, 255, 0.8);
+  --cp-panel: rgba(255, 255, 255, 0.86);
+  --cp-panel-strong: rgba(255, 255, 255, 0.96);
+  --cp-sheen: rgba(255, 255, 255, 0.55);
+  --cp-highlight: rgba(177, 31, 75, 0.12);
+}
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --cp-bg: #3d3b3a;
+  --cp-bg-elevated: #343231;
+  --cp-surface: #292929;
+  --cp-surface-soft: #2e2e2e;
+  --cp-border: #474747;
+  --cp-border-strong: #5f5f5f;
+  --cp-text: #dedede;
+  --cp-text-muted: #919191;
+  --cp-text-soft: #b0b0b0;
+  --cp-accent: #fd8ea1;
+  --cp-accent-hover: #fb7b91;
+  --cp-accent-soft: rgba(253, 142, 161, 0.14);
+  --cp-accent-fg: #1a1a1a;
+  --cp-success: #4ade80;
+  --cp-danger: #f87171;
+  --cp-warning: #fbbf24;
+  --cp-link: #4da6ff;
+  --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+  --cp-overlay: rgba(41, 41, 41, 0.88);
+  --cp-panel: rgba(41, 41, 41, 0.72);
+  --cp-panel-strong: rgba(41, 41, 41, 0.96);
+  --cp-sheen: rgba(255, 255, 255, 0.04);
+  --cp-highlight: rgba(253, 142, 161, 0.12);
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--cp-bg); color: var(--cp-text);
+  font-family: "Segoe UI", Aptos, Calibri, -apple-system, BlinkMacSystemFont, sans-serif;
+  line-height: 1.5;
+}
+code, .mono { font-family: Consolas, "Courier New", Courier, monospace; font-size: .88em; }
+.wrap { max-width: 1160px; margin: 0 auto; padding: 0 24px; }
+header.top { padding: 40px 0 24px; }
+.eyebrow { color: var(--cp-link); font-weight: 600; font-size: .8rem; letter-spacing: .08em; text-transform: uppercase; }
+h1 { font-size: 2rem; margin: 6px 0 8px; font-weight: 600; }
+h2 { font-size: 1.25rem; margin: 0 0 4px; font-weight: 600; }
+.lead { color: var(--cp-text-muted); max-width: 70ch; margin: 0; }
+section { padding: 28px 0; }
+.sub { color: var(--cp-text-muted); margin: 0 0 16px; font-size: .95rem; }
+.card {
+  background: var(--cp-surface); border: 1px solid var(--cp-border); border-radius: 16px;
+  box-shadow: 0 0 2px rgba(0,0,0,.12), 0 1px 2px rgba(0,0,0,.14); padding: 20px;
+}
+.grid { display: grid; gap: 16px; }
+.g3 { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.chip {
+  display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: .78rem;
+  border: 1px solid var(--cp-border); background: var(--cp-surface-soft); color: var(--cp-text-muted);
+}
+.chip.az { color: var(--cp-link); border-color: var(--cp-link); background: color-mix(in srgb, var(--cp-link) 10%, transparent); }
+.toolbar { position: fixed; top: 12px; right: 16px; z-index: 5; }
+button {
+  font: inherit; cursor: pointer; border-radius: .625rem; border: 1px solid var(--cp-border);
+  background: var(--cp-surface); color: var(--cp-text); padding: 6px 12px;
+}
+button:hover { border-color: var(--cp-link); }
+:focus-visible { outline: 2px solid var(--cp-link); outline-offset: 2px; }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: .82rem; color: var(--cp-text-muted); margin-top: 10px; }
+.legend i { display: inline-block; width: 22px; height: 0; border-top: 2px solid var(--cp-link); vertical-align: middle; margin-right: 6px; }
+.legend i.dash { border-top-style: dashed; }
+.legend i.bad { border-color: var(--cp-danger); border-top-style: dashed; }
+
+/* diagram */
+svg.diagram { width: 100%; height: auto; display: block; }
+.lane { fill: color-mix(in srgb, var(--cp-link) 5%, transparent); stroke: var(--cp-border); }
+.lane-t { fill: var(--cp-text-muted); font-size: 12px; font-weight: 600; letter-spacing: .06em; }
+.node { cursor: pointer; }
+.node rect.b { fill: var(--cp-surface); stroke: var(--cp-border-strong); stroke-width: 1.2; rx: 10; }
+.node:hover rect.b, .node.on rect.b { stroke: var(--cp-link); stroke-width: 2.2; }
+.node.on rect.b { fill: color-mix(in srgb, var(--cp-link) 10%, var(--cp-surface)); }
+.node.fail rect.b { stroke: var(--cp-danger); stroke-dasharray: 5 3; }
+.node text.t { fill: var(--cp-text); font-size: 13px; font-weight: 600; }
+.node text.s { fill: var(--cp-text-muted); font-size: 11px; }
+.node .num { fill: var(--cp-link); }
+.node .nt { fill: var(--cp-accent-fg); font-size: 11px; font-weight: 700; }
+.node.fail .num { fill: var(--cp-danger); }
+.edge { stroke: var(--cp-link); stroke-width: 1.8; fill: none; marker-end: url(#ah); }
+.edge.dash { stroke-dasharray: 6 4; }
+.edge.bad { stroke: var(--cp-danger); stroke-dasharray: 6 4; marker-end: url(#ahb); }
+.group { fill: none; stroke: var(--cp-border-strong); stroke-dasharray: 3 3; }
+.group-t { fill: var(--cp-text-soft); font-size: 11px; }
+.sub-b { fill: none; stroke: var(--cp-link); stroke-width: 1.5; stroke-dasharray: 8 5; }
+.rg { fill: var(--cp-surface-soft); stroke: var(--cp-border-strong); stroke-width: 1.4; }
+.rg-t { fill: var(--cp-text); font-size: 12px; font-weight: 600; }
+.tn rect.b { fill: var(--cp-surface); stroke: var(--cp-border-strong); stroke-width: 1.1; }
+.tn.opt rect.b, .pe { stroke-dasharray: 5 3; }
+.pe { fill: color-mix(in srgb, var(--cp-link) 8%, transparent); stroke: var(--cp-link); }
+.tn .ic { fill: var(--cp-link); }
+.tn .ig { fill: var(--cp-accent-fg); font-size: 11px; font-weight: 700; }
+.tn .t { fill: var(--cp-text); font-size: 12px; font-weight: 600; }
+.tn .s { fill: var(--cp-text-muted); font-size: 10px; }
+.tedge { stroke: var(--cp-link); stroke-width: 1.6; fill: none; marker-end: url(#th); }
+.tedge.dash { stroke-dasharray: 6 4; }
+.bd { fill: var(--cp-link); } .bn { fill: var(--cp-accent-fg); font-size: 11px; font-weight: 700; }
+#th path { fill: var(--cp-link); }
+.flowlist { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 4px 24px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); font-size: .88rem; color: var(--cp-text-muted); }
+.flowlist strong { display: inline-block; width: 20px; height: 20px; line-height: 20px; text-align: center; border-radius: 50%; background: var(--cp-link); color: var(--cp-accent-fg); font-size: .75rem; margin-right: 6px; }
+#ah path { fill: var(--cp-link); } #ahb path { fill: var(--cp-danger); }
+@media (prefers-reduced-motion: no-preference) {
+  .edge.flow { stroke-dasharray: 6 4; animation: dash 1.4s linear infinite; }
+  @keyframes dash { to { stroke-dashoffset: -20; } }
+}
+
+/* drill-down */
+.steps { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.steps button[aria-pressed="true"] { background: var(--cp-link); color: var(--cp-accent-fg); border-color: var(--cp-link); }
+.steps button.fail[aria-pressed="false"] { border-color: var(--cp-danger); }
+.detail h3 { margin: 0 0 4px; font-size: 1.1rem; }
+.detail .what { color: var(--cp-text-muted); margin: 0 0 14px; }
+.facts { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+.fact { background: var(--cp-surface-soft); border-radius: 10px; padding: 12px 14px; border-left: 3px solid var(--cp-link); }
+.fact.sec { border-left-color: var(--cp-success); } .fact.err { border-left-color: var(--cp-danger); }
+.fact h4 { margin: 0 0 4px; font-size: .75rem; letter-spacing: .06em; text-transform: uppercase; color: var(--cp-text-muted); }
+.fact p { margin: 0; font-size: .9rem; }
+.nav { display: flex; justify-content: space-between; margin-top: 14px; }
+
+/* tables */
+table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--cp-border); vertical-align: top; }
+th { color: var(--cp-text-muted); font-weight: 600; font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; }
+.tw { overflow-x: auto; }
+details { border-top: 1px solid var(--cp-border); padding: 10px 0; }
+summary { cursor: pointer; font-weight: 600; }
+footer { padding: 24px 0 48px; color: var(--cp-text-soft); font-size: .85rem; }
+.pill-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.deck { padding-bottom: 84px; min-height: 100vh; }
+.slide { display: none; padding-top: 24px; }
+.slide.active { display: block; }
+.slide > .wrap { padding-top: 16px; }
+nav.decknav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 4; display: flex; align-items: center; justify-content: center; gap: 16px;
+  padding: 12px 16px; background: var(--cp-panel-strong); border-top: 1px solid var(--cp-border); margin: 0; }
+.dots { display: flex; gap: 8px; }
+.dots button { width: 12px; height: 12px; padding: 0; border-radius: 50%; background: var(--cp-border-strong); border: 0; }
+.dots button[aria-current="true"] { background: var(--cp-link); transform: scale(1.3); }
+nav.decknav button:disabled { opacity: .45; cursor: default; }
+@media print { .toolbar, nav.decknav { display: none; } body { background: #fff; } .slide { display: block; break-after: page; } }
+</style>
+</head>
+<body>
+<div class="toolbar"><button id="themeBtn" type="button" aria-label="Toggle light or dark theme">Theme</button></div>
+
+<main class="deck">
+<section class="slide" id="purpose"><div class="wrap">
+<header class="top">
+  <div class="eyebrow">Technical walkthrough</div>
+  <h1>Infrastructure architecture &amp; deployment</h1>
+  <p class="lead">Logic App AI Accelerator: a subscription-scoped Bicep deployment that stands up a web/API app, a Logic Apps Standard workflow, and Azure AI services, then runs a PDF → summary → search pipeline on top of it.</p>
+  <div class="pill-row">
+    <span class="chip az">networkMode: public | private</span>
+    <span class="chip az">monitoringMode: none | new | existing</span>
+    <span class="chip">azd or GitHub Actions</span>
+    <span class="chip">Managed identity, no secrets</span>
+  </div>
+</header>
+<div>
+  <h2>Purpose</h2>
+  <p class="sub">An application-focused starting point. It does <strong>not</strong> recreate PBMM / Azure Landing Zone services — private mode plugs into existing subnets, NSGs, routing and private DNS.</p>
+  <div class="grid g3">
+    <div class="card"><strong>Repeatable infra</strong><p class="sub" style="margin:6px 0 0">One <code>main.bicep</code> creates three resource groups, data, compute, AI, monitoring and every RBAC grant.</p></div>
+    <div class="card"><strong>Workflow-orchestrated AI</strong><p class="sub" style="margin:6px 0 0">Logic App detects a new PDF and calls the API, which uses Document Intelligence, Foundry and AI Search.</p></div>
+    <div class="card"><strong>Secure by default</strong><p class="sub" style="margin:6px 0 0">Managed identities and data-plane RBAC throughout; private endpoints and disabled public access in private mode.</p></div>
+  </div>
+</div>
+</div></section>
+
+<section class="slide" id="overview"><div class="wrap">
+  <h2>End-to-end picture</h2>
+  <p class="sub">The deployment path at a glance. Select a step to see its component, data, security, dependencies and errors.</p>
+  <div class="card">
+    <svg class="diagram" viewBox="0 0 1120 180" role="img" aria-label="End-to-end deployment flow" id="svg"></svg>
+  </div>
+  <div class="card detail" aria-live="polite" style="margin-top:16px">
+    <div class="steps" id="steps" role="group" aria-label="Steps"></div>
+    <div id="detail"></div>
+    <div class="nav"><button id="prev" type="button">← Previous step</button><button id="next" type="button">Next step →</button></div>
+  </div>
+</div></section>
+
+<section class="slide" id="topology"><div class="wrap">
+  <h2>Azure infrastructure architecture</h2>
+  <p class="sub">Resources by resource group, with numbered interactions. Dashed items apply only to a given mode or option.</p>
+  <div class="card">
+    <svg class="diagram" viewBox="0 0 1120 580" role="img" aria-label="Azure infrastructure diagram showing the application, AI and operations resource groups" id="topo"></svg>
+    <ol class="flowlist">
+      <li><strong>1</strong> Users reach the web app over HTTPS (optional Entra sign-in).</li>
+      <li><strong>2</strong> The API stores jobs in Cosmos DB and PDFs in Blob Storage.</li>
+      <li><strong>3</strong> A new blob triggers the Logic App workflow.</li>
+      <li><strong>4</strong> The workflow calls the API using its managed identity.</li>
+      <li><strong>5</strong> The API calls Foundry, Document Intelligence and AI Search with Entra tokens.</li>
+      <li><strong>6</strong> Diagnostics and telemetry go to Log Analytics (unless monitoring is none).</li>
+      <li><strong>7</strong> azd or GitHub Actions deploys infrastructure, the container image and the workflow zip.</li>
+    </ol>
+    <div class="legend"><span><i></i>Data / call</span><span><i class="dash"></i>Optional or mode-specific</span><span>Icons are simplified placeholders, not official Azure icons.</span></div>
+  </div>
+</div></section>
+
+<section class="slide" id="security"><div class="wrap">
+  <h2>Security &amp; permissions</h2>
+  <div class="card tw"><table>
+    <thead><tr><th>Identity</th><th>Target</th><th>Access</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Web identity</strong></td><td>ACR; app Storage; Cosmos; Foundry; Doc Intelligence; Search</td><td>AcrPull; Blob Data Contributor; Cosmos data role; OpenAI User, Cognitive Services User; Search Index Data Contributor</td></tr>
+      <tr><td><strong>Logic identity</strong></td><td>Logic host Storage</td><td>Blob, Queue, Table, File contributor (host storage via managed identity)</td></tr>
+      <tr><td><strong>Foundry project</strong></td><td>Storage, Cosmos, Search</td><td>Blob Contributor, Cosmos operator; Search Index &amp; Service Contributor</td></tr>
+      <tr><td><strong>Developer principal</strong></td><td>Storage, ACR, AI services, Cosmos</td><td>Optional: Blob Contributor, AcrPush, Azure AI User, OpenAI/Cognitive User, Search roles, Cosmos data role</td></tr>
+      <tr><td><strong>Logic → API</strong></td><td>Web <code>/api/jobs/process</code></td><td>Managed-identity token for <code>BACKEND_API_AUDIENCE</code>; with App Service auth only the app and the Logic identity are allowed</td></tr>
+    </tbody></table></div>
+  <div class="grid g3" style="margin-top:16px">
+    <div class="card"><strong>Public mode</strong><p class="sub" style="margin:6px 0 0">Public endpoints; optional IP allow-list (default-deny when set).</p></div>
+    <div class="card"><strong>Private mode</strong><p class="sub" style="margin:6px 0 0">Public access disabled, private endpoints, VNet integration, all-traffic routing. Needs 4 distinct subnets and every private DNS zone.</p></div>
+    <div class="card"><strong>App Service auth</strong><p class="sub" style="margin:6px 0 0">Optional Entra sign-in; federated credential on the web identity, no client secret. <code>/api/health</code> is exempt. FTP/SCM basic credentials are restricted by policy resources.</p></div>
+  </div>
+</div></section>
+
+<section class="slide" id="deps"><div class="wrap">
+  <h2>Dependencies</h2>
+  <div class="grid g3">
+    <div class="card"><strong>Tooling</strong><p class="sub" style="margin:6px 0 0">Azure CLI / azd, Bicep, Python 3 (azd hooks), Docker build via ACR Tasks, Node (Logic project).</p></div>
+    <div class="card"><strong>Azure prerequisites</strong><p class="sub" style="margin:6px 0 0">Subscription deploy rights plus permission to create role assignments; Entra rights if app registration is used.</p></div>
+    <div class="card"><strong>Private mode inputs</strong><p class="sub" style="margin:6px 0 0">Existing subnets (private endpoint, web, Logic, agent), private DNS zones, Premium ACR, and a runner that can reach the private SCM endpoints.</p></div>
+  </div>
+</div></section>
+
+<section class="slide" id="errors"><div class="wrap">
+  <h2>Error handling</h2>
+  <div class="card tw"><table>
+    <thead><tr><th>Where</th><th>Behaviour</th></tr></thead>
+    <tbody>
+      <tr><td>Bicep parameters</td><td>Invalid combinations call <code>fail()</code> at deployment start with a clear message (missing subnets or DNS zones, non-Premium ACR in private mode, bad SKU for ASE, mismatched chat deployment).</td></tr>
+      <tr><td>Upload API</td><td>Structured JSON <code>{error:{code,message}}</code>: 400 missing/empty, 415 non-PDF, 413 too large, 404 unknown job; any unhandled exception → generic 500 (logged server-side).</td></tr>
+      <tr><td>Logic → API call</td><td>Exponential retry, 4 attempts (5 s min, 5 min max). Then <code>Handle_Processing_Failure</code> captures run id and results and terminates the run <code>Failed</code>.</td></tr>
+      <tr><td>Hooks &amp; teardown</td><td>Orphaned <code>Disconnected</code> AMPLS endpoints are repaired before provisioning; AMPLS removed before <code>down</code>; soft-deleted AI accounts purged only if <code>AZURE_PURGE_SOFT_DELETED_ON_DOWN=true</code> (otherwise redeploy fails with <code>FlagMustBeSetForRestore</code>).</td></tr>
+      <tr><td>Storage policy</td><td>If the subscription forces storage public access to Disabled, Logic host storage is unreachable in public mode — use private mode.</td></tr>
+    </tbody></table></div>
+  <details><summary>Known gap (from the code)</summary>
+    <p class="sub">If <code>process()</code> throws after the job is set to <code>processing</code>, the API does not write a <code>failed</code> status. The Logic App run shows Failed, but the UI keeps polling a job that stays <code>processing</code>. Support should check Logic App run history and App Insights.</p></details>
+  <p class="sub" style="margin-top:12px">Sources: README.md, azure.yaml, infra/main.bicep and modules, app/logic workflow, app/backend, .github/workflows/deploy.yml. No screenshots exist in the repository; diagrams are derived from code.</p>
+</div></section>
+</main>
+
+<nav class="decknav" aria-label="Slide navigation">
+  <button id="sPrev" type="button">← Previous</button>
+  <div class="dots" id="dots"></div>
+  <span id="count" class="mono" aria-live="polite"></span>
+  <button id="sNext" type="button">Next →</button>
+</nav>
+
+<script>
+const S = [
+ {id:'D1', lane:'d', title:'Start deployment', sub:'azd up · GitHub Actions',
+  what:'A developer runs azd up, or the manual Deploy workflow runs az deployment sub create against infra/main.bicep.',
+  comp:'azd (azure.yaml) or deploy.yml (OIDC azure/login).', data:'Parameters from azd env vars (main.bicepparam) or a committed parameter file.',
+  sec:'Workflow uses OIDC (id-token) with no stored secret. Private mode needs a self-hosted runner on the network.', dep:'Azure CLI, azd, Bicep; role-assignment rights.', err:'Parameter validation fails fast with fail() messages.'},
+ {id:'D2', lane:'d', title:'Pre-provision hooks', sub:'azd only',
+  what:'Repairs any Disconnected AMPLS private endpoint, and creates or updates the Entra app registration when App Service auth is on.',
+  comp:'scripts/hooks/teardown_monitoring.py, app_registration.py.', data:'Writes AZURE_APP_SERVICE_AUTH_CLIENT_ID to the azd environment.',
+  sec:'Needs app-registration rights in the auth tenant.', dep:'Python 3.', err:'continueOnError is false; the deployment stops. The GitHub workflow does not run hooks.'},
+ {id:'D3', lane:'d', title:'Provision with Bicep', sub:'subscription scope',
+  what:'Creates 3 resource groups, then data, monitoring, AI stack, compute, private endpoints and all role assignments.',
+  comp:'main.bicep → modules: application/data, application/compute, ai/stack, ai/project-capability-host, monitoring/stack, networking/private-endpoint, shared/*.',
+  data:'Outputs (endpoints, names, resource groups) flow back to azd or deployment-outputs.json.',
+  sec:'User-assigned identities; RBAC for web, Logic, Foundry project, developer. Existing AI resources get roles on the resource itself.', dep:'Existing subnets and DNS zones in private mode; models deployed one at a time.', err:'Typed params and fail() guards; AI model deployments are serialized.'},
+ {id:'D4', lane:'d', title:'Post-provision hook', sub:'azd only',
+  what:'Adds the web redirect URI and a federated credential trusting the web managed identity.',
+  comp:'scripts/hooks/app_registration.py postprovision.', data:'Web app URI, identity.',
+  sec:'Federated credential means no client secret is created.', dep:'D2 client id, deployed web app.', err:'Fails the azd run if the registration cannot be updated.'},
+ {id:'D5', lane:'d', title:'Deploy app code', sub:'web image · Logic zip',
+  what:'Builds the container remotely in ACR and deploys it to the web app; zips app/logic and deploys it to the Logic App.',
+  comp:'azd services web (appservice) and logic (function); or az acr build, az webapp restart, az logicapp deployment source config-zip.', data:'Image tag in ACR; workflow, connections.json and parameters.json.',
+  sec:'Web identity pulls with AcrPull. Zip excludes local.settings and node_modules.', dep:'Infrastructure must exist first; private mode needs SCM reachability.', err:'Deploy step fails the pipeline; infrastructure stays in place and can be re-run.'}
+];
+const N = {
+ D1:[30,70,170,64], D2:[250,70,170,64], D3:[470,70,210,64], D4:[730,70,150,64], D5:[930,70,170,64],
+};
+const svg = document.getElementById('svg'), NS='http://www.w3.org/2000/svg';
+function el(n,a={},p=svg,t){const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);if(t!=null)e.textContent=t;p.appendChild(e);return e;}
+const defs = el('defs');
+for (const [id] of [['ah'],['ahb']]) { const m=el('marker',{id,viewBox:'0 0 10 10',refX:9,refY:5,markerWidth:7,markerHeight:7,orient:'auto-start-reverse'},defs); el('path',{d:'M0 0L10 5L0 10z'},m); }
+el('rect',{class:'lane',x:10,y:30,width:1100,height:140,rx:14});
+el('text',{class:'lane-t',x:26,y:52},svg,'DEPLOYMENT  (INFRASTRUCTURE AS CODE)');
+const edge=(a,b,cls='')=>{const [x1,y1,w1,h1]=N[a],[x2,y2,w2,h2]=N[b];
+  let d; if(Math.abs((y1+h1/2)-(y2+h2/2))<5) d=`M${x1+w1} ${y1+h1/2}H${x2}`;
+  else d=`M${x1+w1/2} ${y1+h1}V${y2}`;
+  el('path',{d,class:'edge '+cls});};
+['D1-D2','D2-D3','D3-D4','D4-D5'].forEach(s=>{const [a,b]=s.split('-');edge(a,b);});
+// nodes
+const nodeEls={};
+S.forEach((s,i)=>{if(!N[s.id])return;const [x,y,w,h]=N[s.id];
+  const g=el('g',{class:'node'+(s.lane==='f'?' fail':''),tabindex:0,role:'button','aria-label':s.id+': '+s.title,'data-i':i});
+  el('rect',{class:'b',x,y,width:w,height:h},g);
+  el('circle',{class:'num',cx:x+16,cy:y+16,r:11},g); el('text',{class:'nt',x:x+16,y:y+20,'text-anchor':'middle'},g,s.id);
+  el('text',{class:'t',x:x+34,y:y+22},g,s.title);
+  el('text',{class:'s',x:x+14,y:y+46},g,s.sub);
+  g.addEventListener('click',()=>pick(i)); g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pick(i);}});
+  nodeEls[i]=g;});
+// service group under R5
+// drill-down
+const stepsEl=document.getElementById('steps'), det=document.getElementById('detail'); let cur=0; const btns=[];
+S.forEach((s,i)=>{const b=document.createElement('button');b.type='button';b.textContent=s.id;b.title=s.title;if(s.lane==='f')b.className='fail';b.addEventListener('click',()=>pick(i));stepsEl.appendChild(b);btns.push(b);});
+function esc(t){return t.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function pick(i){cur=i;const s=S[i];
+  btns.forEach((b,j)=>b.setAttribute('aria-pressed',j===i));
+  Object.values(nodeEls).forEach((g,j)=>g.classList.toggle('on',j===i));
+  det.innerHTML=`<h3>${s.id} · ${esc(s.title)} <span class="chip az">${esc(s.sub)}</span></h3><p class="what">${esc(s.what)}</p>
+  <div class="facts">
+   <div class="fact"><h4>Component</h4><p>${esc(s.comp)}</p></div>
+   <div class="fact"><h4>Data</h4><p>${esc(s.data)}</p></div>
+   <div class="fact sec"><h4>Security</h4><p>${esc(s.sec)}</p></div>
+   <div class="fact"><h4>Dependencies</h4><p>${esc(s.dep)}</p></div>
+   <div class="fact err"><h4>Errors</h4><p>${esc(s.err)}</p></div></div>`;
+  document.getElementById('prev').disabled=i===0;document.getElementById('next').disabled=i===S.length-1;}
+document.getElementById('prev').onclick=()=>pick(Math.max(0,cur-1));
+document.getElementById('next').onclick=()=>pick(Math.min(S.length-1,cur+1));
+pick(0);
+(()=>{const T=document.getElementById('topo');
+ const e=(n,a={},p=T,t)=>{const x=document.createElementNS(NS,n);for(const k in a)x.setAttribute(k,a[k]);if(t!=null)x.textContent=t;p.appendChild(x);return x;};
+ const m=e('marker',{id:'th',viewBox:'0 0 10 10',refX:9,refY:5,markerWidth:7,markerHeight:7,orient:'auto-start-reverse'},e('defs'));e('path',{d:'M0 0L10 5L0 10z'},m);
+ const box=(x,y,w,h,c,t,dash)=>{e('rect',{class:c,x,y,width:w,height:h,rx:8,...(dash?{'stroke-dasharray':'8 5'}:{})});if(t)e('text',{class:'rg-t',x:x+12,y:y+20},T,t);};
+ const node=(x,y,t,s,g,opt)=>{const w=140,h=72,G=e('g',{class:'tn'+(opt?' opt':'')});
+  e('rect',{class:'b',x,y,width:w,height:h,rx:8},G);e('rect',{class:'ic',x:x+w/2-12,y:y+7,width:24,height:24,rx:5},G);
+  e('text',{class:'ig',x:x+w/2,y:y+23,'text-anchor':'middle'},G,g);
+  e('text',{class:'t',x:x+w/2,y:y+49,'text-anchor':'middle'},G,t);e('text',{class:'s',x:x+w/2,y:y+63,'text-anchor':'middle'},G,s);};
+ const edge=(d,dash)=>e('path',{d,class:'tedge'+(dash?' dash':'')});
+ const badge=(x,y,n)=>{e('circle',{class:'bd',cx:x,cy:y,r:10});e('text',{class:'bn',x,y:y+4,'text-anchor':'middle'},T,n);};
+ // boundaries
+ box(165,25,945,545,'sub-b','',false);
+ e('text',{class:'rg-t',x:177,y:17},T,'Azure subscription');
+ box(185,45,530,385,'rg','rg-<app>-<env>   Application');
+ box(735,45,355,385,'rg','rg-<app>-ai-<env>   AI services');
+ box(185,450,905,105,'rg','');
+ e('text',{class:'rg-t',x:710,y:470},T,'rg-<app>-ops-<env>   Operations (monitoringMode = new)');
+ // private endpoint bands
+ [[205,490],[755,315]].forEach(([x,w])=>{e('rect',{class:'pe',x,y:392,width:w,height:24,rx:6});e('text',{class:'s',x:x+w/2,y:408,'text-anchor':'middle',style:'fill:var(--cp-text-muted);font-size:10px'},T,'Private endpoints + private DNS (private mode)');});
+ // actors
+ node(15,105,'Users','Browser','U');
+ node(15,290,'Developer / CI','azd · GitHub Actions','CI');
+ // application RG
+ node(205,105,'Web app','App Service · container','W');
+ node(375,105,'Logic App Standard','Workflow: process-document','L');
+ node(545,105,'Container Registry','ACR · image','R');
+ node(205,225,'Cosmos DB','jobs container','C');
+ node(375,225,'Storage account','documents (Blob)','S');
+ node(545,225,'Logic host storage','Blob · Queue · Table · File','H');
+ e('rect',{class:'b',x:205,y:335,width:490,height:44,rx:8,style:'fill:var(--cp-surface);stroke:var(--cp-border-strong)'});
+ e('text',{class:'t',x:450,y:355,'text-anchor':'middle',style:'fill:var(--cp-text);font-size:12px;font-weight:600'},T,'User-assigned managed identities');
+ e('text',{class:'s',x:450,y:370,'text-anchor':'middle',style:'fill:var(--cp-text-muted);font-size:10px'},T,'id-web-*  ·  id-logic-*');
+ // AI RG
+ node(755,105,'Microsoft Foundry','Account · models','F');
+ node(925,105,'Document Intelligence','prebuilt-layout','D');
+ node(755,225,'Azure AI Search','Index','S');
+ node(925,225,'Foundry project','Capability host','P',true);
+ // ops RG
+ node(205,470,'Log Analytics','Workspace','LA');
+ node(375,470,'Application Insights','Telemetry','AI');
+ node(545,470,'Azure Monitor PLS','AMPLS','M',true);
+ // edges
+ edge('M155 141H205');badge(180,129,'1');
+ edge('M275 177V225');badge(289,201,'2');
+ edge('M300 177L400 225');
+ edge('M445 225V177');badge(459,201,'3');
+ edge('M375 141H345');badge(360,129,'4');
+ edge('M515 177L590 225');
+ edge('M615 105V96H300V105','dash');
+ e('text',{class:'s',x:460,y:92,'text-anchor':'middle',style:'fill:var(--cp-text-muted);font-size:10px'},T,'image pull');
+ edge('M240 105V78H995V105');badge(620,78,'5');
+ edge('M275 430V470');badge(289,448,'6');
+ edge('M990 430V440H345V470','dash');
+ edge('M155 326H185');badge(170,314,'7');
+})();
+const slides=[...document.querySelectorAll('.slide')], dots=document.getElementById('dots'); let si=0;
+const titles=['Purpose','End-to-end','Topology','Security','Dependencies','Errors'];
+slides.forEach((s,i)=>{const b=document.createElement('button');b.type='button';b.setAttribute('aria-label',`Slide ${i+1}: ${titles[i]}`);b.title=titles[i];b.onclick=()=>show(i);dots.appendChild(b);});
+function show(i,fromHash){si=Math.max(0,Math.min(slides.length-1,i));
+  slides.forEach((s,j)=>s.classList.toggle('active',j===si));
+  [...dots.children].forEach((b,j)=>b.setAttribute('aria-current',j===si));
+  document.getElementById('count').textContent=`${si+1} / ${slides.length} · ${titles[si]}`;
+  document.getElementById('sPrev').disabled=si===0;document.getElementById('sNext').disabled=si===slides.length-1;
+  if(!fromHash)history.replaceState(null,'','#'+slides[si].id);window.scrollTo(0,0);}
+document.getElementById('sPrev').onclick=()=>show(si-1);
+document.getElementById('sNext').onclick=()=>show(si+1);
+document.addEventListener('keydown',e=>{if(e.altKey||e.ctrlKey||e.metaKey)return;
+  if(e.key==='ArrowRight'||e.key==='PageDown')show(si+1);else if(e.key==='ArrowLeft'||e.key==='PageUp')show(si-1);
+  else if(e.key==='Home')show(0);else if(e.key==='End')show(slides.length-1);});
+window.addEventListener('hashchange',()=>{const j=slides.findIndex(s=>'#'+s.id===location.hash);if(j>=0)show(j,true);});
+{const j=slides.findIndex(s=>'#'+s.id===location.hash);show(j>=0?j:0,true);}
+document.getElementById('themeBtn').onclick=()=>{const r=document.documentElement;r.setAttribute('data-theme',r.getAttribute('data-theme')==='dark'?'light':'dark');};
+</script>
+</body>
+</html>
