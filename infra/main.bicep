@@ -35,8 +35,11 @@ param location string
 @description('public creates no private endpoints. private integrates with existing PBMM or ALZ networking.')
 param networkMode networkModeType = 'public'
 
+@description('Explicitly approves internet-facing endpoints in public mode. Public mode also requires hosting.allowedIpRanges.')
+param allowPublicAccess bool = false
+
 @description('none disables monitoring, new deploys application-owned monitoring, existing links to an existing platform.')
-param monitoringMode monitoringModeType = 'new'
+param monitoringMode monitoringModeType = 'none'
 
 @description('Existing network resource IDs. Required only in private mode.')
 param privateNetwork privateNetworkType = {}
@@ -110,6 +113,9 @@ func aiTarget(label string, mode string?, resourceId string?, resourceType strin
       )[0]
 
 var privateMode = networkMode == 'private'
+var publicAccessApproved = privateMode || allowPublicAccess
+  ? true
+  : fail('Public mode requires allowPublicAccess=true. Set AZURE_ALLOW_PUBLIC_ACCESS=true only after configuring hosting.allowedIpRanges.')
 
 // Naming
 var normalizedAppName = toLower(replace(appName, '-', ''))
@@ -150,15 +156,19 @@ var webAseId = hosting.?webAppServiceEnvironmentId ?? ''
 var logicAseId = hosting.?logicAppServiceEnvironmentId ?? ''
 var corsAllowedOrigins = hosting.?corsAllowedOrigins ?? []
 var allowedIpRanges = !privateMode
-  ? hosting.?allowedIpRanges ?? []
+  ? !publicAccessApproved
+    ? []
+    : !empty(hosting.?allowedIpRanges ?? [])
+      ? hosting.allowedIpRanges!
+      : fail('hosting.allowedIpRanges must contain at least one IPv4 CIDR range in public mode.')
   : empty(hosting.?allowedIpRanges ?? [])
     ? []
     : fail('hosting.allowedIpRanges applies only to public mode. Private mode disables public access.')
 
 // SKUs
 var webAppPlanSku = skus.?webAppPlan ?? {
-  name: 'P1v3'
-  tier: 'PremiumV3'
+  name: 'B1'
+  tier: 'Basic'
   capacity: 1
 }
 var logicAppPlanSku = skus.?logicAppPlan ?? {
@@ -166,7 +176,7 @@ var logicAppPlanSku = skus.?logicAppPlan ?? {
   tier: 'WorkflowStandard'
   capacity: 1
 }
-var containerRegistrySku = skus.?containerRegistry ?? 'Premium'
+var containerRegistrySku = skus.?containerRegistry ?? 'Basic'
 var resolvedSkus = {
   webAppPlan: empty(webAseId) || startsWith(toUpper(webAppPlanSku.name), 'I')
     ? webAppPlanSku
@@ -182,7 +192,7 @@ var resolvedSkus = {
     ? containerRegistrySku
     : fail('skus.containerRegistry must be Premium in private mode because private endpoints require Premium.')
   search: skus.?search ?? {
-    name: 'standard'
+    name: 'basic'
   }
   aiServices: skus.?aiServices ?? 'S0'
   documentIntelligence: skus.?documentIntelligence ?? 'S0'
@@ -286,7 +296,7 @@ var tenantId = valueOrDefault(identity.?tenantId, tenant().tenantId)
 var authTenantId = valueOrDefault(identity.?authTenantId, tenantId)
 var principalId = identity.?principalId ?? ''
 var principalType = identity.?principalType ?? 'User'
-var enableAppServiceAuth = identity.?enableAppServiceAuth ?? false
+var enableAppServiceAuth = identity.?enableAppServiceAuth ?? true
 var appServiceAuthClientId = !enableAppServiceAuth
   ? ''
   : !empty(identity.?appServiceAuthClientId ?? '')

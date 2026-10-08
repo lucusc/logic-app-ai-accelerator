@@ -3,8 +3,8 @@
 preprovision  creates or updates the app registration and stores its client ID in the azd environment.
 postprovision adds the web redirect URI and the managed-identity federated credential.
 
-Both commands do nothing unless AZURE_USE_APP_SERVICE_AUTH is true. No client secrets are created:
-App Service authenticates to Entra with the web app's user-assigned managed identity.
+Authentication is enabled unless AZURE_USE_APP_SERVICE_AUTH is explicitly false. No client secrets
+are created: App Service authenticates to Entra with the web app's user-assigned managed identity.
 """
 
 from __future__ import annotations
@@ -59,7 +59,7 @@ class GraphClient:
 
 
 def is_enabled(env: Mapping[str, str]) -> bool:
-    return env.get("AZURE_USE_APP_SERVICE_AUTH", "").strip().lower() in {"true", "1", "yes"}
+    return env.get("AZURE_USE_APP_SERVICE_AUTH", "true").strip().lower() in {"true", "1", "yes"}
 
 
 def require(env: Mapping[str, str], name: str) -> str:

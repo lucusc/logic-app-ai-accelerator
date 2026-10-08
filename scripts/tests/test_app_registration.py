@@ -36,10 +36,18 @@ def completed(returncode=0, stdout="", stderr=""):
 
 
 def test_main_skips_when_auth_disabled(capsys):
-    result = hook.main(["preprovision"], env={"AZURE_ENV_NAME": "dev"}, run=pytest.fail)
+    result = hook.main(
+        ["preprovision"],
+        env={"AZURE_ENV_NAME": "dev", "AZURE_USE_APP_SERVICE_AUTH": "false"},
+        run=pytest.fail,
+    )
 
     assert result == 0
     assert "skipping" in capsys.readouterr().out
+
+
+def test_auth_is_enabled_by_default():
+    assert hook.is_enabled({}) is True
 
 
 def test_main_rejects_unknown_command():

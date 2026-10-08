@@ -1,0 +1,107 @@
+name: Deploy application
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment_name:
+        description: GitHub Environment containing the Azure variables
+        required: true
+        default: dev
+      resource_group:
+        description: Application resource group; defaults to AZURE_APPLICATION_RESOURCE_GROUP
+        required: false
+        type: string
+      registry_name:
+        description: Container registry name; defaults to AZURE_CONTAINER_REGISTRY_NAME
+        required: false
+        type: string
+      web_app_name:
+        description: Web App name; defaults to WEB_APP_NAME
+        required: false
+        type: string
+      image_name:
+        description: Image repository; defaults to AZURE_WEB_IMAGE_NAME
+        required: false
+        type: string
+      runner:
+        description: Use a network-connected self-hosted runner for private deployments
+        required: true
+        default: ubuntu-latest
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-application-${{ inputs.environment_name }}
+  cancel-in-progress: false
+
+jobs:
+  application:
+    runs-on: ${{ inputs.runner }}
+    environment: ${{ inputs.environment_name }}
+    env:
+      RESOURCE_GROUP: ${{ inputs.resource_group || vars.AZURE_APPLICATION_RESOURCE_GROUP }}
+      REGISTRY_NAME: ${{ inputs.registry_name || vars.AZURE_CONTAINER_REGISTRY_NAME }}
+      WEB_APP_NAME: ${{ inputs.web_app_name || vars.WEB_APP_NAME }}
+      IMAGE_NAME: ${{ inputs.image_name || vars.AZURE_WEB_IMAGE_NAME }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Validate deployment settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in RESOURCE_GROUP REGISTRY_NAME WEB_APP_NAME IMAGE_NAME; do
+            if [ -z "${!name}" ]; then
+              echo "::error::$name must be supplied as a workflow input or GitHub environment variable."
+              exit 1
+            fi
+          done
+
+      - name: Build immutable application image
+        id: image
+        shell: bash
+        run: |
+          set -euo pipefail
+          az acr build \
+            --registry "$REGISTRY_NAME" \
+            --image "$IMAGE_NAME:$GITHUB_SHA" \
+            --file app/backend/Dockerfile \
+            .
+          digest="$(az acr repository show \
+            --name "$REGISTRY_NAME" \
+            --image "$IMAGE_NAME:$GITHUB_SHA" \
+            --query digest \
+            --output tsv)"
+          test -n "$digest"
+          image_reference="${REGISTRY_NAME}.azurecr.io/${IMAGE_NAME}@${digest}"
+          echo "reference=$image_reference" >> "$GITHUB_OUTPUT"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy application image
+        shell: bash
+        env:
+          IMAGE_REFERENCE: ${{ steps.image.outputs.reference }}
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          az webapp config container set \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$WEB_APP_NAME" \
+            --container-image-name "$IMAGE_REFERENCE" \
+            --container-registry-url "https://${REGISTRY_NAME}.azurecr.io" \
+            --output none
+          az webapp config appsettings set \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$WEB_APP_NAME" \
+            --settings \
+              "DEPLOYMENT_GITHUB_SHA=$GITHUB_SHA" \
+              "DEPLOYMENT_IMAGE_DIGEST=$IMAGE_DIGEST" \
+            --output none

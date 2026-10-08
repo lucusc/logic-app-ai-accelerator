@@ -21,7 +21,7 @@ param aiServicesSku string = 'S0'
 param documentIntelligenceSku string = 'S0'
 @description('Search SKU: { name, replicaCount?, partitionCount?, semanticSearch? }.')
 param searchSku object = {
-  name: 'standard'
+  name: 'basic'
 }
 @description('Model deployments: [{ name, model, version, format?, skuName?, capacity?, versionUpgradeOption? }].')
 param modelDeployments array

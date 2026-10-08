@@ -1,0 +1,69 @@
+name: Deploy infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment_name:
+        description: GitHub Environment containing the Azure variables
+        required: true
+        default: dev
+      parameter_file:
+        description: Parameter file committed for the target environment
+        required: true
+        default: infra/main.parameters.example.json
+      runner:
+        description: Use a network-connected self-hosted runner for private deployments
+        required: true
+        default: ubuntu-latest
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-infrastructure-${{ inputs.environment_name }}
+  cancel-in-progress: false
+
+jobs:
+  infrastructure:
+    runs-on: ${{ inputs.runner }}
+    environment: ${{ inputs.environment_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy infrastructure
+        id: infrastructure
+        shell: bash
+        run: |
+          set -euo pipefail
+          deployment_name="infra-${GITHUB_SHA:0:12}"
+          az deployment sub create \
+            --name "$deployment_name" \
+            --location "${{ vars.AZURE_DEPLOYMENT_LOCATION }}" \
+            --template-file infra/main.bicep \
+            --parameters @"${{ inputs.parameter_file }}"
+          az deployment sub show \
+            --name "$deployment_name" \
+            --query properties.outputs \
+            --output json > deployment-outputs.json
+          jq -n \
+            --arg githubSha "$GITHUB_SHA" \
+            --arg deploymentName "$deployment_name" \
+            '{githubSha: $githubSha, deploymentName: $deploymentName}' \
+            > deployment-metadata.json
+
+      - name: Upload deployment outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: infrastructure-${{ github.sha }}
+          path: |
+            deployment-outputs.json
+            deployment-metadata.json
+          if-no-files-found: error
+          retention-days: 30

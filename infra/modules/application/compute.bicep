@@ -29,7 +29,7 @@ param applicationInsightsConnectionString string = ''
 param logAnalyticsWorkspaceId string = ''
 param tenantId string = tenant().tenantId
 param authTenantId string = tenantId
-param enableAppServiceAuth bool = false
+param enableAppServiceAuth bool = true
 param appServiceAuthClientId string = ''
 param backendApiAudience string = 'api://logic-app-ai-accelerator'
 
@@ -38,7 +38,7 @@ var webUsesAse = !empty(webAppServiceEnvironmentId)
 var logicUsesAse = !empty(logicAppServiceEnvironmentId)
 var webPrivateEndpointEnabled = privateMode && !webUsesAse
 var logicPrivateEndpointEnabled = privateMode && !logicUsesAse
-var containerImage = !empty(webContainerImage) ? webContainerImage : '${registryLoginServer}/accelerator:latest'
+var containerImage = !empty(webContainerImage) ? webContainerImage : '${registryLoginServer}/${names.webApp}:unconfigured'
 
 // The web host name is computed so the Logic App does not depend on the web app,
 // which lets the web app allow-list the Logic App outbound addresses.
@@ -165,11 +165,11 @@ resource logicSiteOutbound 'Microsoft.Web/sites@2024-04-01' existing = if (!empt
 // When an IP allow-list is set, the Logic App must still reach the API.
 var logicOutboundIpRules = empty(allowedIpRanges)
   ? []
-  : map(split(logicSiteOutbound!.properties.possibleOutboundIpAddresses, ','), ip => {
-      name: 'logic-app-outbound'
+  : map(split(logicSiteOutbound!.properties.possibleOutboundIpAddresses, ','), (ip, index) => {
+      name: 'allow-logic-${index}'
       ipAddress: '${trim(ip)}/32'
       action: 'Allow'
-      priority: 200
+      priority: 200 + index
     })
 
 resource webPlan 'Microsoft.Web/serverfarms@2024-04-01' = {

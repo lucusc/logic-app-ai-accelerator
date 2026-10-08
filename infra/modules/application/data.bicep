@@ -10,7 +10,7 @@ param storageSku string = 'Standard_LRS'
 param cosmosSku object = {
   mode: 'serverless'
 }
-param containerRegistrySku string = 'Premium'
+param containerRegistrySku string = 'Basic'
 param diagnosticsEnabled bool = false
 param logAnalyticsWorkspaceId string = ''
 
@@ -101,6 +101,7 @@ resource cosmos 'Microsoft.DocumentDB/databaseAccounts@2024-11-15' = {
     }
     databaseAccountOfferType: 'Standard'
     disableKeyBasedMetadataWriteAccess: true
+    disableLocalAuth: true
     locations: [
       {
         locationName: location

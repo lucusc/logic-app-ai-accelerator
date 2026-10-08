@@ -14,8 +14,11 @@
     "networkMode": {
       "value": "public"
     },
+    "allowPublicAccess": {
+      "value": true
+    },
     "monitoringMode": {
-      "value": "new"
+      "value": "none"
     },
     "privateNetwork": {
       "value": {
@@ -72,13 +75,6 @@
           "version": "2025-04-14",
           "skuName": "GlobalStandard",
           "capacity": 10
-        },
-        {
-          "name": "embedding",
-          "model": "text-embedding-3-small",
-          "version": "1",
-          "skuName": "GlobalStandard",
-          "capacity": 10
         }
       ]
     },
@@ -89,13 +85,16 @@
       "value": {
         "principalId": "",
         "principalType": "User",
-        "enableAppServiceAuth": false
+        "enableAppServiceAuth": true,
+        "appServiceAuthClientId": "<app-registration-client-id>"
       }
     },
     "hosting": {
       "value": {
         "corsAllowedOrigins": [],
-        "allowedIpRanges": []
+        "allowedIpRanges": [
+          "<your-public-ip>/32"
+        ]
       }
     },
     "tags": {

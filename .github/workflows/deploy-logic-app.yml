@@ -1,0 +1,97 @@
+name: Deploy Logic App
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment_name:
+        description: GitHub Environment containing the Azure variables
+        required: true
+        default: dev
+      resource_group:
+        description: Application resource group; defaults to AZURE_APPLICATION_RESOURCE_GROUP
+        required: false
+        type: string
+      logic_app_name:
+        description: Logic App name; defaults to LOGIC_APP_NAME
+        required: false
+        type: string
+      runner:
+        description: Use a network-connected self-hosted runner for private deployments
+        required: true
+        default: ubuntu-latest
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-logic-app-${{ inputs.environment_name }}
+  cancel-in-progress: false
+
+jobs:
+  logic-app:
+    runs-on: ${{ inputs.runner }}
+    environment: ${{ inputs.environment_name }}
+    env:
+      RESOURCE_GROUP: ${{ inputs.resource_group || vars.AZURE_APPLICATION_RESOURCE_GROUP }}
+      LOGIC_APP_NAME: ${{ inputs.logic_app_name || vars.LOGIC_APP_NAME }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Validate deployment settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in RESOURCE_GROUP LOGIC_APP_NAME; do
+            if [ -z "${!name}" ]; then
+              echo "::error::$name must be supplied as a workflow input or GitHub environment variable."
+              exit 1
+            fi
+          done
+
+      - name: Package Logic App
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_path="$RUNNER_TEMP/logic-${GITHUB_SHA}.zip"
+          (
+            cd app/logic
+            zip -qr "$package_path" . \
+              -x 'local.settings.json' \
+              -x 'local.settings.example.json' \
+              -x 'README.md' \
+              -x 'package.json' \
+              -x 'node_modules/*'
+          )
+          echo "path=$package_path" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy Logic App package
+        shell: bash
+        env:
+          PACKAGE_PATH: ${{ steps.package.outputs.path }}
+        run: |
+          set -euo pipefail
+          az logicapp deployment source config-zip \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$LOGIC_APP_NAME" \
+            --src "$PACKAGE_PATH"
+          az logicapp config appsettings set \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$LOGIC_APP_NAME" \
+            --settings "DEPLOYMENT_GITHUB_SHA=$GITHUB_SHA" \
+            --output none
+
+      - name: Upload deployed Logic App package
+        uses: actions/upload-artifact@v4
+        with:
+          name: logic-app-${{ github.sha }}
+          path: ${{ steps.package.outputs.path }}
+          if-no-files-found: error
+          retention-days: 30

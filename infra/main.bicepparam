@@ -6,7 +6,8 @@ param appName = readEnvironmentVariable('AZURE_APP_NAME', 'aiaccel')
 param environmentName = readEnvironmentVariable('AZURE_ENV_NAME', 'dev')
 param location = readEnvironmentVariable('AZURE_LOCATION', 'canadacentral')
 param networkMode = any(readEnvironmentVariable('AZURE_NETWORK_MODE', 'public'))
-param monitoringMode = any(readEnvironmentVariable('AZURE_MONITORING_MODE', 'new'))
+param allowPublicAccess = bool(readEnvironmentVariable('AZURE_ALLOW_PUBLIC_ACCESS', 'false'))
+param monitoringMode = any(readEnvironmentVariable('AZURE_MONITORING_MODE', 'none'))
 
 // Private networking. AZURE_PRIVATE_DNS_ZONES_RESOURCE_GROUP_ID builds standard Azure public cloud
 // zone IDs from one resource group; AZURE_PRIVATE_DNS_ZONE_IDS (JSON) overrides individual zones
@@ -95,7 +96,7 @@ param resourceNames = {
 
 param skus = {
   webAppPlan: {
-    name: readEnvironmentVariable('AZURE_WEB_APP_SKU', 'P1v3')
+    name: readEnvironmentVariable('AZURE_WEB_APP_SKU', 'B1')
     tier: readEnvironmentVariable('AZURE_WEB_APP_SKU_TIER', '')
     capacity: int(readEnvironmentVariable('AZURE_WEB_APP_SKU_CAPACITY', '1'))
   }
@@ -104,9 +105,9 @@ param skus = {
     tier: readEnvironmentVariable('AZURE_LOGIC_APP_SKU_TIER', '')
     capacity: int(readEnvironmentVariable('AZURE_LOGIC_APP_SKU_CAPACITY', '1'))
   }
-  containerRegistry: any(readEnvironmentVariable('AZURE_CONTAINER_REGISTRY_SKU', 'Premium'))
+  containerRegistry: any(readEnvironmentVariable('AZURE_CONTAINER_REGISTRY_SKU', 'Basic'))
   search: {
-    name: any(readEnvironmentVariable('AZURE_SEARCH_SKU', 'standard'))
+    name: any(readEnvironmentVariable('AZURE_SEARCH_SKU', 'basic'))
     replicaCount: int(readEnvironmentVariable('AZURE_SEARCH_REPLICA_COUNT', '1'))
     partitionCount: int(readEnvironmentVariable('AZURE_SEARCH_PARTITION_COUNT', '1'))
     semanticSearch: any(readEnvironmentVariable('AZURE_SEARCH_SEMANTIC_SEARCH', 'free'))
@@ -154,7 +155,7 @@ param identity = {
   authTenantId: readEnvironmentVariable('AZURE_AUTH_TENANT_ID', '')
   principalId: readEnvironmentVariable('AZURE_PRINCIPAL_ID', '')
   principalType: any(readEnvironmentVariable('AZURE_PRINCIPAL_TYPE', 'User'))
-  enableAppServiceAuth: bool(readEnvironmentVariable('AZURE_USE_APP_SERVICE_AUTH', 'false'))
+  enableAppServiceAuth: bool(readEnvironmentVariable('AZURE_USE_APP_SERVICE_AUTH', 'true'))
   appServiceAuthClientId: readEnvironmentVariable('AZURE_APP_SERVICE_AUTH_CLIENT_ID', '')
 }
 
